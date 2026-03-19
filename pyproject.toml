@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "edtronaut-ai-co-worker"
+version = "0.1.0"
+description = "Edtronaut AI Co-worker Engine"
+requires-python = ">=3.9"
+dependencies = [
+    "langchain",
+    "langchain-openai",
+    "langgraph",
+    "faiss-cpu",
+    "python-dotenv",
+    "streamlit",
+    "langchain-google-genai"
+]
+
+[tool.setuptools.packages.find]
+where = ["my-app"]
+include = ["coworker_engine*"]

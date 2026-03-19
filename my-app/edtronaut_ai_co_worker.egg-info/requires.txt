@@ -1,0 +1,7 @@
+langchain
+langchain-openai
+langgraph
+faiss-cpu
+python-dotenv
+streamlit
+langchain-google-genai

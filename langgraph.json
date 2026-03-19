@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "engine": "coworker_engine.engine:engine"
+  },
+  "env": ".env"
+}

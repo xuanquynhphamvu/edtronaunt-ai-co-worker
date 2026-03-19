@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: edtronaut-ai-co-worker
+Version: 0.1.0
+Summary: Edtronaut AI Co-worker Engine
+Requires-Python: >=3.9
+Requires-Dist: langchain
+Requires-Dist: langchain-openai
+Requires-Dist: langgraph
+Requires-Dist: faiss-cpu
+Requires-Dist: python-dotenv
+Requires-Dist: streamlit
+Requires-Dist: langchain-google-genai
