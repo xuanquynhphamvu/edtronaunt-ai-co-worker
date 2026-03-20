@@ -4,22 +4,9 @@ An AI workplace-simulation platform built with Streamlit, LangGraph, and Ollama.
 
 This repository implements a rollout simulation with three key personas:
 
-- Executive Sponsor
-- People Lead
-- Regional Operations Lead
-
-## What This Project Does
-
-The application presents the user with an interactive workplace simulation rather than a generic chatbot. The user can ask broad situational questions, direct a question to a specific persona by tagging them, or request outputs that can be saved into a portfolio pack.
-
-**Core Capabilities:**
-- **Intelligent Routing:** A hidden Supervisor decides between direct persona routing and a cross-functional meeting synthesis.
-- **Stateful Personas:** Personas maintain tone, role constraints, and lightweight reputation state based on user interactions.
-- **Scenario Knowledge Retrieval:** Grounded responses using lightweight vector-style similarity against a local knowledge base.
-- **Dynamic Memory:** Agent identity is anchored in shared markdown files (`SOUL.md`), while evolving active knowledge is session-scoped (`Knowledge.md`).
-- **Tool Hooks (Mock Jira):** Jira-style tool hooks allow agents to list, search, create, comment, and update external tasks.
-- **Portfolio Export:** Assistant responses can be curated into portfolio artifacts and exported as a polished PDF.
-- **Safety Guardrails:** Keyword checks and content filtering to ensure professional output.
+- CEO
+- CHRO
+- Employer Branding & Internal Communications Regional Manager
 
 ## Demo Flow
 
@@ -31,40 +18,6 @@ The application presents the user with an interactive workplace simulation rathe
 6. The final response is delivered to the chat.
 7. The user can capture the response as an artifact (e.g., Final Plan, Internal Communication, Executive Update).
 8. Once all required artifacts are collected, the portfolio pack can be exported as a PDF.
-
-## Architecture
-
-```mermaid
-flowchart TD
-    A["User (Streamlit UI)"] --> B["Safety Node"]
-    B --> C["Supervisor Plan Node"]
-    C --> D["Executive Persona"]
-    C --> E["People Persona"]
-    C --> F["Operations Persona"]
-    D --> G["Tools Node"]
-    E --> G
-    F --> G
-    D --> H["Meeting Synthesis"]
-    E --> H
-    F --> H
-    G --> D
-    G --> E
-    G --> F
-    H --> I["Assistant Response"]
-    D --> I
-    E --> I
-    F --> I
-
-    J["Static Knowledge Chunks"] --> D
-    J --> E
-    J --> F
-    K["agent_memory/*/SOUL.md"] --> D
-    K --> E
-    K --> F
-    L["agent_memory/sessions/<session_id>/*/Knowledge.md"] --> D
-    L --> E
-    L --> F
-```
 
 ### Core Modules
 
@@ -79,35 +32,16 @@ flowchart TD
 - `my-app/coworker_engine/utils/portfolio.py`: Artifact registry and PDF export.
 - `my-app/coworker_engine/utils/safety.py`: Forbidden language guardrails.
 
-## Agent Design
-
 ### Personas
 
 The active simulation defines three personas with distinct identities, system prompts, and reputation triggers. Users can directly tag them using aliases, for example:
-- `@executive`, `@sponsor`, `@leadership`
-- `@people`, `@talent`, `@hr`
-- `@operations`, `@ops`, `@regional`
+- **CEO**: `@executive`, `@ceo`, `@leadership`
+- **CHRO**: `@people`, `@talent`, `@hr`, `@chro`
+- **Employer Branding & Internal Communications Regional Manager**: `@operations`, `@ops`, `@regional`
 
 ### Supervisor
 
 The Supervisor agent operates transparently in the background to determine whether the user's intent warrants a direct response from one coworker or a synthesized multi-stakeholder meeting. It also provides automatic hints if the user appears stuck.
-
-### Markdown-Based Agent Memory
-
-Each agent references two markdown memory structures:
-- `SOUL.md`: Stable identity, role, and core behavioral instructions.
-- `Knowledge.md`: Evolving working memory and contextual journal.
-
-Base files are stored under `agent_memory/<persona>/`. During active sessions, evolving context is written under `agent_memory/sessions/<session_id>/<persona>/Knowledge.md`. 
-The `session_id` guarantees isolation, meaning active browser conversations do not retrieve durable notes from past sessions.
-
-## Storage and Integrations
-
-### Knowledge Retrieval
-A custom retrieval layer (`knowledge.py`) handles chunking and context delivery:
-- Supports Python-defined static chunks and dynamically augmented `Knowledge.md` records.
-- Utilizes an inner-product search (via `faiss` if installed, with a NumPy fallback).
-- Scoped strictly to the active session.
 
 ### Mock Jira Integration
 Personas have access to operational context via tool execution. The application provides a bundled Fake Jira Flask service under `my-app/fake_jira` which runs by default on `http://127.0.0.1:5000`. Available tools include Jira task listing, creation, commenting, and status updates.
