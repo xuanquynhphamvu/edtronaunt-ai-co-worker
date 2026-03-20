@@ -1,8 +1,17 @@
 from langgraph.graph import StateGraph, START, END
+from langgraph.prebuilt import ToolNode
 
 from .utils.state import AgentState
 from .utils.nodes import ceo_node, chro_node, regional_node, safety_node, reputation_node
 from .agent import supervisor_node
+from .utils.tools import (
+    add_jira_comment,
+    calculate_kpi,
+    list_jira_tasks,
+    retrieve_brand_data,
+    search_jira_tasks,
+    update_jira_status,
+)
 
 def supervisor_router(state: AgentState) -> str:
     """Reads the supervisor's decision to route to the correct agent."""
@@ -17,6 +26,25 @@ def safety_router(state: AgentState) -> str:
         return "end"
     return "reputation"
 
+
+def agent_tools_router(state: AgentState) -> str:
+    messages = state.get("messages", [])
+    last_message = messages[-1] if messages else None
+    if getattr(last_message, "tool_calls", None):
+        return "tools"
+    return "end"
+
+
+def return_from_tools_router(state: AgentState) -> str:
+    active_npc = state.get("active_npc", "")
+    if active_npc == "CEO":
+        return "ceo"
+    if active_npc == "CHRO":
+        return "chro"
+    if active_npc == "Regional Manager":
+        return "regional"
+    return "end"
+
 # 1. Initialize Graph with our Custom TypedDict
 workflow = StateGraph(AgentState)
 
@@ -27,6 +55,19 @@ workflow.add_node("supervisor", supervisor_node)
 workflow.add_node("ceo", ceo_node)
 workflow.add_node("chro", chro_node)
 workflow.add_node("regional", regional_node)
+workflow.add_node(
+    "tools",
+    ToolNode(
+        [
+            calculate_kpi,
+            retrieve_brand_data,
+            list_jira_tasks,
+            search_jira_tasks,
+            add_jira_comment,
+            update_jira_status,
+        ]
+    ),
+)
 
 # ── Execution Order ──────────────────────────────────────────
 # START → safety → (blocked? END) → reputation → supervisor → NPCs → END
@@ -59,10 +100,43 @@ workflow.add_conditional_edges(
     }
 )
 
-# Step 5: Agents finish and route to END
-workflow.add_edge("ceo", END)
-workflow.add_edge("chro", END)
-workflow.add_edge("regional", END)
+# Step 5: Agents either call tools or finish
+workflow.add_conditional_edges(
+    "ceo",
+    agent_tools_router,
+    {
+        "tools": "tools",
+        "end": END,
+    }
+)
+workflow.add_conditional_edges(
+    "chro",
+    agent_tools_router,
+    {
+        "tools": "tools",
+        "end": END,
+    }
+)
+workflow.add_conditional_edges(
+    "regional",
+    agent_tools_router,
+    {
+        "tools": "tools",
+        "end": END,
+    }
+)
+
+# Step 6: Tool results return to the same active NPC for final response
+workflow.add_conditional_edges(
+    "tools",
+    return_from_tools_router,
+    {
+        "ceo": "ceo",
+        "chro": "chro",
+        "regional": "regional",
+        "end": END,
+    }
+)
 
 # 5. Compile into runnable Langchain graph
 # Note: When using `langgraph dev` or LangSmith Studio, 

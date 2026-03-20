@@ -1,12 +1,23 @@
 from langchain_core.messages import SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 from .utils.state import AgentState
 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
+llm = ChatOllama(model="llama3", temperature=0.7)
 
 class RouterOutput(BaseModel):
     next_route: str = Field(description="The next agent to route to: 'ceo', 'chro', 'regional', or 'end' if everything is handled.")
+
+
+def _route_from_explicit_tag(message_text: str) -> str | None:
+    lowered = message_text.lower()
+    if "@ceo" in lowered:
+        return "ceo"
+    if "@chro" in lowered:
+        return "chro"
+    if "@regional" in lowered or "@regional manager" in lowered:
+        return "regional"
+    return None
 
 def supervisor_node(state: AgentState):
     """The Director Agent that routes invisibly."""
@@ -26,6 +37,15 @@ def supervisor_node(state: AgentState):
     turn_count = state.get('turn_count', 0)
     if messages and messages[-1].type == "human":
         turn_count += 1
+        explicit_route = _route_from_explicit_tag(messages[-1].content)
+        if explicit_route:
+            return {
+                "active_npc": "Supervisor",
+                "next_route": explicit_route,
+                "user_sentiment": "neutral",
+                "turn_count": turn_count,
+                "supervisor_hint": state.get("supervisor_hint", ""),
+            }
         
     supervisor_hint = state.get("supervisor_hint", "")
     if turn_count > 3 and not supervisor_hint:

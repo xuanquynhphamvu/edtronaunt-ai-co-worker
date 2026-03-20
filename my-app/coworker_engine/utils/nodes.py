@@ -1,7 +1,17 @@
-from langchain_core.messages import AIMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.messages import SystemMessage
+from langchain_ollama import ChatOllama
 from .state import AgentState
 from dotenv import load_dotenv
+import re
+from .knowledge import format_knowledge_context, retrieve_knowledge
+from .tools import (
+    add_jira_comment,
+    calculate_kpi,
+    list_jira_tasks,
+    retrieve_brand_data,
+    search_jira_tasks,
+    update_jira_status,
+)
 
 load_dotenv()
 
@@ -9,14 +19,22 @@ from ..personas.ceo import CEO_PROMPT
 from ..personas.chro import CHRO_PROMPT
 from ..personas.regional import REGIONAL_PROMPT
 
-# Initialize Gemini Model
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.7)
+# Initialize Ollama model
+llm = ChatOllama(model="llama3", temperature=0.7)
+TOOL_CAPABLE_MODEL_PREFIXES = ("qwen", "mistral", "smollm", "gemma", "deepseek")
 
 # ─────────────────────────────────────────────
 # SAFETY NODE — runs before any LLM call
 # ─────────────────────────────────────────────
-# Keywords that are forbidden across ALL personas
-GLOBAL_FORBIDDEN = ["bet", "gamble", "emoji", "wager", "stake"]
+# Match only whole forbidden words so innocuous terms like "better"
+# do not trip the safety filter via substring collisions.
+GLOBAL_FORBIDDEN_PATTERNS = {
+    "bet": re.compile(r"\bbet(?:s|ting)?\b", re.IGNORECASE),
+    "gamble": re.compile(r"\bgambl(?:e|es|ed|ing)\b", re.IGNORECASE),
+    "emoji": re.compile(r"\bemojis?\b", re.IGNORECASE),
+    "wager": re.compile(r"\bwager(?:s|ed|ing)?\b", re.IGNORECASE),
+    "stake": re.compile(r"\bstakes?\b", re.IGNORECASE),
+}
 
 
 def safety_node(state: AgentState) -> dict:
@@ -26,12 +44,12 @@ def safety_node(state: AgentState) -> dict:
     AIMessage is returned so the graph can end early.
     """
     last_message = state.get("messages", [])[-1] if state.get("messages") else None
-    user_text = last_message.content.lower() if last_message else ""
+    user_text = last_message.content if last_message else ""
 
     flags = [
         f"Forbidden keyword detected: '{kw}'"
-        for kw in GLOBAL_FORBIDDEN
-        if kw in user_text
+        for kw, pattern in GLOBAL_FORBIDDEN_PATTERNS.items()
+        if pattern.search(user_text)
     ]
 
     if flags:
@@ -101,11 +119,70 @@ def reputation_node(state: AgentState) -> dict:
 HISTORY_WINDOW = 6  # last 3 user + 3 AI turns
 
 
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def _user_requested_detailed_format(user_text: str) -> bool:
+    lowered = user_text.lower()
+    detail_markers = [
+        "plan",
+        "steps",
+        "bullet",
+        "bullets",
+        "list",
+        "framework",
+        "detailed",
+        "detail",
+        "roadmap",
+        "break down",
+        "breakdown",
+    ]
+    return any(marker in lowered for marker in detail_markers)
+
+
+def _compress_chat_reply(text: str, user_text: str) -> str:
+    if _user_requested_detailed_format(user_text):
+        return text.strip()
+
+    paragraphs = [part.strip() for part in text.strip().split("\n\n") if part.strip()]
+    first_block = paragraphs[0] if paragraphs else text.strip()
+    sentences = [s.strip() for s in SENTENCE_SPLIT_RE.split(first_block) if s.strip()]
+    if len(sentences) <= 2:
+        return first_block
+    return " ".join(sentences[:2]).strip()
+
+
 def build_npc_node(prompt: str, npc_name: str, namespace: str):
     """Factory function to build node logic for a specific NPC."""
 
+    agent_id = {
+        "CEO": "AI_CEO",
+        "CHRO": "AI_CHRO",
+        "Regional Manager": "AI_REGIONAL",
+    }.get(npc_name, "AI_AGENT")
+
+    agent_tools = [
+        calculate_kpi,
+        retrieve_brand_data,
+        list_jira_tasks,
+        search_jira_tasks,
+        add_jira_comment,
+        update_jira_status,
+    ]
+    tool_enabled_llm = (
+        llm.bind_tools(agent_tools)
+        if llm.model.lower().startswith(TOOL_CAPABLE_MODEL_PREFIXES)
+        else None
+    )
+
     def node(state: AgentState):
         reputation = state.get("reputation", 0.5)
+        full_history = list(state.get("messages", []))
+        last_user_message = next(
+            (message.content for message in reversed(full_history) if message.type == "human"),
+            "",
+        )
+        knowledge_chunks = retrieve_knowledge(last_user_message, namespaces=[namespace], top_k=3)
 
         # Map reputation score to a human-readable warmth level for the LLM
         if reputation >= 0.8:
@@ -118,10 +195,29 @@ def build_npc_node(prompt: str, npc_name: str, namespace: str):
         system_message_content = (
             f"{prompt}\n"
             f"Answer carefully as the selected role: {npc_name}.\n\n"
+            "Keep the answer natural and human-sized. Default to one short paragraph with 2 to 4 "
+            "sentences. Do not write a consultant-style memo. Do not give a multi-step framework "
+            "unless the user explicitly asks for one. If the user asks a broad question, give the "
+            "single most useful answer first.\n\n"
+            "When the user asks about live tasks, comments, backlog, or status, use the Jira tools "
+            "instead of guessing. When the user asks you to add a comment or update a task, use a tool "
+            "to perform the action. Use your own namespace when calling retrieve_brand_data: "
+            f"`{namespace}`. Use your own agent_id when calling add_jira_comment: `{agent_id}`. "
+            "After receiving tool results, answer the user directly and do not mention internal tool mechanics.\n\n"
             f"[RELATIONSHIP CONTEXT]: The user's current reputation with you is "
             f"{reputation:.2f}/1.0 — your attitude toward them is currently {warmth}. "
             f"Reflect this in how forthcoming and warm your response is."
         )
+
+        if knowledge_chunks:
+            system_message_content += (
+                "\n\n[RETRIEVED SIMULATION CONTEXT]:\n"
+                f"{format_knowledge_context(knowledge_chunks)}"
+                "\nUse this retrieved context when it is relevant. If the context is incomplete, "
+                "make the smallest reasonable assumption and say what you are assuming. "
+                "Do not dump all retrieved context back to the user. Never mention sources, files, "
+                "briefs, or retrieved context unless the user explicitly asks how you know."
+            )
 
         # Check if the supervisor injected a hidden hint for this turn
         hint = state.get("supervisor_hint", "")
@@ -135,12 +231,23 @@ def build_npc_node(prompt: str, npc_name: str, namespace: str):
 
         # Trim history to the last HISTORY_WINDOW messages to keep latency low.
         # The system prompt is always prepended fresh, so persona context is never lost.
-        full_history = list(state.get("messages", []))
         windowed_history = full_history[-HISTORY_WINDOW:]
         messages_to_pass = [system_message] + windowed_history
 
-        # Invoke Gemini!
-        response = llm.invoke(messages_to_pass)
+        if tool_enabled_llm is not None:
+            response = tool_enabled_llm.invoke(messages_to_pass)
+            if getattr(response, "tool_calls", None):
+                return {
+                    "messages": [response],
+                    "active_npc": npc_name,
+                    "supervisor_hint": "",
+                }
+        else:
+            response = llm.invoke(messages_to_pass)
+
+        response_text = response.content if isinstance(response.content, str) else str(response.content)
+        response_text = _compress_chat_reply(response_text, last_user_message)
+        response.content = response_text
 
         return {
             "messages": [response],

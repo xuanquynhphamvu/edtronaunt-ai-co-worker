@@ -2,6 +2,9 @@ pyproject.toml
 my-app/coworker_engine/__init__.py
 my-app/coworker_engine/agent.py
 my-app/coworker_engine/engine.py
+my-app/coworker_engine/personas/ceo.py
+my-app/coworker_engine/personas/chro.py
+my-app/coworker_engine/personas/regional.py
 my-app/coworker_engine/utils/__init__.py
 my-app/coworker_engine/utils/nodes.py
 my-app/coworker_engine/utils/state.py

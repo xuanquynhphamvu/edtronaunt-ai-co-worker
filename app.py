@@ -1,5 +1,4 @@
 import streamlit as st
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 from dotenv import load_dotenv
 import sys
@@ -12,9 +11,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "my-app"))
 from coworker_engine.engine import engine
 
 st.title("AI Co-worker Engine (LangGraph + Multi-Agent)")
-
-# Initialize LLM for the app context 
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.7)
 
 # Chat history initialization
 if "messages" not in st.session_state:
