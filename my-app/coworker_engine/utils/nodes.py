@@ -8,6 +8,14 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 
 from ..simulation import ACTIVE_SIMULATION, PersonaDefinition
+from .agent_memory import (
+    append_persona_knowledge,
+    append_persona_tool_handoff,
+    append_supervisor_knowledge,
+    ensure_simulation_agent_files,
+    load_persona_memory,
+    load_supervisor_memory,
+)
 from .knowledge import format_knowledge_context, retrieve_knowledge
 from .safety import find_forbidden_language
 from .state import AgentState
@@ -30,6 +38,7 @@ ROUTE_BY_NPC = {persona.name: persona.route for persona in ACTIVE_SIMULATION.per
 REPUTATION_TRIGGERS = {
     persona.name: list(persona.reputation_triggers) for persona in ACTIVE_SIMULATION.personas
 }
+ensure_simulation_agent_files(ACTIVE_SIMULATION)
 
 HISTORY_WINDOW = 6
 SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
@@ -226,6 +235,7 @@ def build_npc_node(persona: PersonaDefinition):
             (message.content for message in reversed(full_history) if message.type == "human"),
             "",
         )
+        soul_markdown, knowledge_markdown = load_persona_memory(persona)
         reputation_state = _update_persona_reputation(
             state, persona.name, last_user_message.lower()
         )
@@ -242,7 +252,9 @@ def build_npc_node(persona: PersonaDefinition):
             warmth = "skeptical and guarded"
 
         system_message_content = (
-            f"{persona.system_prompt}\n\n"
+            "Use these markdown files as your durable internal context.\n\n"
+            f"[SOUL.md]\n{soul_markdown}\n\n"
+            f"[Knowledge.md]\n{knowledge_markdown}\n\n"
             f"Answer carefully as the selected role: {persona.name}.\n\n"
             "Keep the answer natural and human-sized. Default to one short paragraph with 2 to 4 "
             "sentences. Do not write a consultant-style memo. Do not give a multi-step framework "
@@ -292,6 +304,14 @@ def build_npc_node(persona: PersonaDefinition):
         if tool_enabled_llm is not None:
             response = tool_enabled_llm.invoke(messages_to_pass)
             if getattr(response, "tool_calls", None):
+                append_persona_tool_handoff(
+                    persona,
+                    user_message=last_user_message,
+                    tool_names=[
+                        str(tool_call.get("name", "tool"))
+                        for tool_call in getattr(response, "tool_calls", [])
+                    ],
+                )
                 tool_result = {
                     "messages": [response],
                     "active_npc": persona.name,
@@ -306,6 +326,13 @@ def build_npc_node(persona: PersonaDefinition):
             response.content if isinstance(response.content, str) else str(response.content)
         )
         response.content = _compress_chat_reply(response_text, last_user_message)
+        append_persona_knowledge(
+            persona,
+            title="Task update",
+            user_message=last_user_message,
+            agent_response=response.content,
+            mode=state.get("mode", "direct_reply"),
+        )
 
         updated_meeting_queue = list(state.get("meeting_queue", []))
         if (
@@ -346,6 +373,7 @@ persona_nodes = {
 
 
 def meeting_synthesis_node(state: AgentState) -> dict:
+    supervisor_soul, supervisor_knowledge = load_supervisor_memory()
     meeting_notes = list(state.get("meeting_notes", []))
     latest_user_message = next(
         (message.content for message in reversed(state.get("messages", [])) if message.type == "human"),
@@ -359,6 +387,9 @@ def meeting_synthesis_node(state: AgentState) -> dict:
 
     system_message = SystemMessage(
         content=(
+            "Use these markdown files as the Supervisor's durable internal memory.\n\n"
+            f"[SOUL.md]\n{supervisor_soul}\n\n"
+            f"[Knowledge.md]\n{supervisor_knowledge}\n\n"
             "You are the invisible Supervisor summarizing a cross-functional meeting. "
             f"Respond in a neutral narrator voice. Synthesize the views from {persona_names} "
             "into one final recommendation. Keep it concise, concrete, and balanced. "
@@ -374,6 +405,13 @@ def meeting_synthesis_node(state: AgentState) -> dict:
         response.content if isinstance(response.content, str) else str(response.content)
     )
     response.content = _compress_chat_reply(response_text, latest_user_message)
+    append_supervisor_knowledge(
+        "Meeting synthesis",
+        [
+            f"User request: {' '.join(latest_user_message.split())[:220]}",
+            f"Final response: {' '.join(response.content.split())[:220]}",
+        ],
+    )
 
     return {
         "messages": [response],
