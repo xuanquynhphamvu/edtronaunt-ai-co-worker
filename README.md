@@ -275,7 +275,9 @@ These checks are applied:
 ├── doc/
 │   ├── 01. AI Engineer Intern Take-home Assignment 2.0.pdf
 │   ├── 08. HRM Talent & Leadership Development - Gucci 2.0.pdf
-│   └── daily-distill-feature-plan.md
+│   ├── daily-distill-feature-plan.md
+│   └── simulation-modules/
+│       └── module-2.1-script.md
 ├── exports/
 ├── langgraph.json
 ├── my-app/
@@ -631,8 +633,11 @@ The repository includes source documents that appear to ground the prototype:
 
 - [01. AI Engineer Intern Take-home Assignment 2.0.pdf](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/doc/01.%20AI%20Engineer%20Intern%20Take-home%20Assignment%202.0.pdf)
 - [08. HRM Talent & Leadership Development - Gucci 2.0.pdf](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/doc/08.%20HRM%20Talent%20%26%20Leadership%20Development%20-%20Gucci%202.0.pdf)
+- [module-2.1-script.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/doc/simulation-modules/module-2.1-script.md)
 
 The active retrieval corpus currently references the first document and a reusable simulation starter brief embedded in Python code.
+
+The simulation modules folder also includes working facilitation scripts that make portfolio-pack capture points explicit. Module 2.1 maps where to save `Executive Update`, `Final Plan`, and `Internal Comms` artifacts during the session.
 
 ## Suggested Next Improvements
 
