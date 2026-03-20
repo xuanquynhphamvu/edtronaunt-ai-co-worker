@@ -1,7 +1,11 @@
+flask
 langchain
 langchain-openai
 langchain-ollama
 langgraph
 faiss-cpu
+langchain-google-genai
 python-dotenv
 reportlab
+requests
+streamlit

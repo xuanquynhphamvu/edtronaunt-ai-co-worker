@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Edtronaut AI Co-worker Engine"
 requires-python = ">=3.9"
 dependencies = [
+    "flask",
     "langchain",
     "langchain-openai",
     "langchain-ollama",
@@ -15,10 +16,11 @@ dependencies = [
     "faiss-cpu",
     "python-dotenv",
     "reportlab",
+    "requests",
     "streamlit",
     "langchain-google-genai"
 ]
 
 [tool.setuptools.packages.find]
 where = ["my-app"]
-include = ["coworker_engine*"]
+include = ["coworker_engine*", "fake_jira*"]
