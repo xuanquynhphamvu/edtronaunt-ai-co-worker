@@ -27,13 +27,39 @@ def _flash(level: str, text: str) -> None:
     st.session_state["portfolio_flash"] = {"level": level, "text": text}
 
 
-def _append_message(role: str, content: str) -> None:
+def _build_message_record(
+    role: str,
+    content: str,
+    *,
+    contributor: str | None = None,
+    is_final: bool | None = None,
+) -> dict[str, object]:
+    message = {
+        "id": str(uuid4()),
+        "role": role,
+        "content": content,
+    }
+    if contributor:
+        message["contributor"] = contributor
+    if is_final is not None:
+        message["is_final"] = is_final
+    return message
+
+
+def _append_message(
+    role: str,
+    content: str,
+    *,
+    contributor: str | None = None,
+    is_final: bool | None = None,
+) -> None:
     st.session_state.messages.append(
-        {
-            "id": str(uuid4()),
-            "role": role,
-            "content": content,
-        }
+        _build_message_record(
+            role,
+            content,
+            contributor=contributor,
+            is_final=is_final,
+        )
     )
 
 
@@ -54,6 +80,59 @@ def _message_id(message: dict, index: int) -> str:
     if isinstance(message_id, str) and message_id.strip():
         return message_id
     return f"legacy-{index}"
+
+
+def _message_is_final(message: dict) -> bool:
+    is_final = message.get("is_final")
+    if isinstance(is_final, bool):
+        return is_final
+    return message.get("role") == "assistant"
+
+
+def _assistant_messages_from_state(final_state: dict) -> list[dict[str, object]]:
+    visible_responses = final_state.get("visible_responses")
+    if isinstance(visible_responses, list) and visible_responses:
+        visible_message_payloads: list[dict[str, object]] = []
+        for response in visible_responses:
+            if not isinstance(response, dict):
+                continue
+            content = str(response.get("content", ""))
+            if not content.strip():
+                continue
+            contributor = str(response.get("speaker", "")).strip() or None
+            visible_message_payloads.append(
+                {
+                    "content": content,
+                    "contributor": contributor,
+                    "is_final": bool(response.get("is_final")),
+                }
+            )
+        if visible_message_payloads:
+            for message in visible_message_payloads:
+                message["is_final"] = False
+            visible_message_payloads[-1]["is_final"] = True
+            return [
+                _build_message_record(
+                    "assistant",
+                    str(message["content"]),
+                    contributor=message["contributor"],
+                    is_final=bool(message["is_final"]),
+                )
+                for message in visible_message_payloads
+            ]
+
+    final_messages = final_state.get("messages", [])
+    final_message = final_messages[-1].content if final_messages else ""
+    active_npc = str(final_state.get("active_npc", "")).strip()
+    contributor = active_npc if active_npc and active_npc != "System" else None
+    return [
+        _build_message_record(
+            "assistant",
+            str(final_message),
+            contributor=contributor,
+            is_final=True,
+        )
+    ]
 
 
 def _save_message_as_artifact(
@@ -166,6 +245,16 @@ def _render_save_actions(message: dict, message_id: str) -> None:
                     )
 
 
+def _render_chat_message(message: dict, message_id: str) -> None:
+    contributor = str(message.get("contributor", "")).strip()
+    with st.chat_message(str(message["role"])):
+        if contributor:
+            st.markdown(f"**{contributor}**")
+        st.markdown(str(message.get("content", "")))
+        if message["role"] == "assistant" and _message_is_final(message):
+            _render_save_actions(message, message_id)
+
+
 def _render_portfolio_sidebar() -> None:
     status = get_portfolio_status(st.session_state)
     flash = st.session_state.get("portfolio_flash")
@@ -241,57 +330,44 @@ def _render_coworker_sidebar() -> None:
         st.caption(f"Tag with {aliases}")
 
 
-st.title("AI Co-worker Engine")
-st.caption(ACTIVE_SIMULATION.title)
-st.markdown(ACTIVE_SIMULATION.brief)
+def main() -> None:
+    st.title("AI Co-worker Engine")
+    st.caption(ACTIVE_SIMULATION.title)
+    st.markdown(ACTIVE_SIMULATION.brief)
 
-# Chat history initialization
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "thread_id" not in st.session_state:
-    st.session_state.thread_id = f"streamlit-{uuid4()}"
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "thread_id" not in st.session_state:
+        st.session_state.thread_id = f"streamlit-{uuid4()}"
 
-with st.sidebar:
-    _render_coworker_sidebar()
-    st.markdown("### Success Criteria")
-    for item in ACTIVE_SIMULATION.success_criteria:
-        st.markdown(f"- {item}")
-    _render_portfolio_sidebar()
+    with st.sidebar:
+        _render_coworker_sidebar()
+        st.markdown("### Success Criteria")
+        for item in ACTIVE_SIMULATION.success_criteria:
+            st.markdown(f"- {item}")
+        _render_portfolio_sidebar()
 
-# Display chat history
-for index, message in enumerate(st.session_state.messages):
-    message_id = _message_id(message, index)
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-        if message["role"] == "assistant":
-            _render_save_actions(message, message_id)
+    for index, message in enumerate(st.session_state.messages):
+        _render_chat_message(message, _message_id(message, index))
 
-# User input
-if prompt := st.chat_input(f"Ask {ACTIVE_SIMULATION.tag_hints}..."):
-    # Append user message
-    _append_message("user", prompt)
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    if prompt := st.chat_input(f"Ask {ACTIVE_SIMULATION.tag_hints}..."):
+        _append_message("user", prompt)
+        _render_chat_message(st.session_state.messages[-1], _message_id(st.session_state.messages[-1], len(st.session_state.messages) - 1))
 
-    # Invoke the LangGraph Engine
-    with st.chat_message("assistant"):
-        input_state = {
-            "messages": _to_langchain_messages(st.session_state.messages)
-        }
-        
-        # Configure thread for LangGraph memory
+        input_state = {"messages": _to_langchain_messages(st.session_state.messages)}
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
-        
-        # Invoke Langgraph
         final_state = engine.invoke(input_state, config=config)
-        
-        # Extract the node and message generated
-        final_message = final_state['messages'][-1].content
-        active_npc = final_state.get('active_npc', 'System')
-        
-        response_text = f"{final_message}"
-        st.markdown(response_text)
 
-    # Save to history
-    _append_message("assistant", response_text)
-    st.rerun()
+        assistant_messages = _assistant_messages_from_state(final_state)
+        for message in assistant_messages:
+            st.session_state.messages.append(message)
+            _render_chat_message(
+                message,
+                _message_id(message, len(st.session_state.messages) - 1),
+            )
+
+        st.rerun()
+
+
+if __name__ == "__main__":
+    main()

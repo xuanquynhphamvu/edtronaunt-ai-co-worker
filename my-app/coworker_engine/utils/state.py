@@ -9,6 +9,12 @@ class MeetingNote(TypedDict):
     content: str
 
 
+class VisibleResponse(TypedDict):
+    speaker: str
+    content: str
+    is_final: bool
+
+
 class AgentState(TypedDict):
     # Tracks the conversation history; new messages are appended
     messages: Annotated[list[BaseMessage], add_messages]
@@ -29,6 +35,7 @@ class AgentState(TypedDict):
     target_npc: str            # configured persona route for direct reply
     meeting_queue: list[str]   # Remaining meeting participants in order
     meeting_notes: list[MeetingNote]
+    visible_responses: list[VisibleResponse]
     final_response_mode: str
     persona_reputation: dict[str, float]
     persona_alignment: dict[str, float]

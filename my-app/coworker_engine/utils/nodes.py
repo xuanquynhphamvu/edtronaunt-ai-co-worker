@@ -4,21 +4,19 @@ import os
 import re
 
 from dotenv import load_dotenv
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_ollama import ChatOllama
 
 from ..simulation import ACTIVE_SIMULATION, PersonaDefinition
 from .agent_memory import (
     append_persona_knowledge,
     append_persona_tool_handoff,
-    append_supervisor_knowledge,
     ensure_simulation_agent_files,
     load_persona_memory,
-    load_supervisor_memory,
 )
 from .knowledge import format_knowledge_context, retrieve_knowledge
 from .safety import find_forbidden_language
-from .state import AgentState
+from .state import AgentState, VisibleResponse
 from .tools import (
     add_jira_comment,
     calculate_kpi,
@@ -60,6 +58,13 @@ def safety_node(state: AgentState) -> dict:
         return {
             "safety_flags": flags,
             "messages": [block_response],
+            "visible_responses": [
+                {
+                    "speaker": "",
+                    "content": block_response.content,
+                    "is_final": True,
+                }
+            ],
             "next_route": "end",
         }
 
@@ -213,6 +218,48 @@ def _simulation_context_block() -> str:
     )
 
 
+def _meeting_instruction_block(
+    *,
+    meeting_notes: list[dict],
+    last_user_message: str,
+    is_final_meeting_response: bool,
+) -> str:
+    if not meeting_notes and not is_final_meeting_response:
+        return (
+            "\n\n[MEETING MODE]: You are the first contributor in a visible cross-functional chat. "
+            "Give your own perspective only. Do not summarize other contributors and do not present "
+            "your message as the final conclusion."
+        )
+
+    notes_text = "\n".join(
+        f"- {note.get('npc', 'Unknown')}: {note.get('content', '')}" for note in meeting_notes
+    ) or "- No prior meeting notes."
+
+    if is_final_meeting_response:
+        return (
+            "\n\n[MEETING MODE]: Prior contributors have already spoken. Review their notes and "
+            "deliver the final visible recommendation in your own voice. Synthesize the prior views, "
+            "name at least one trade-off, and make the recommendation feel conclusive.\n\n"
+            f"[PRIOR MEETING NOTES]\nUser request: {last_user_message}\n{notes_text}"
+        )
+
+    return (
+        "\n\n[MEETING MODE]: Other contributors may already have spoken. Add your own perspective "
+        "to the visible chat, but do not write the final conclusion.\n\n"
+        f"[PRIOR MEETING NOTES]\nUser request: {last_user_message}\n{notes_text}"
+    )
+
+
+def _build_visible_response(
+    *, speaker: str, content: str, is_final: bool
+) -> VisibleResponse:
+    return {
+        "speaker": speaker,
+        "content": content,
+        "is_final": is_final,
+    }
+
+
 def build_npc_node(persona: PersonaDefinition):
     agent_tools = [
         calculate_kpi,
@@ -234,6 +281,13 @@ def build_npc_node(persona: PersonaDefinition):
         last_user_message = next(
             (message.content for message in reversed(full_history) if message.type == "human"),
             "",
+        )
+        is_meeting = state.get("mode") == "meeting"
+        current_meeting_queue = list(state.get("meeting_queue", []))
+        is_final_meeting_response = (
+            is_meeting
+            and len(current_meeting_queue) == 1
+            and current_meeting_queue[0] == persona.route
         )
         soul_markdown, knowledge_markdown = load_persona_memory(persona)
         reputation_state = _update_persona_reputation(
@@ -281,6 +335,13 @@ def build_npc_node(persona: PersonaDefinition):
                 f"\n\n[TURN-SPECIFIC REQUIREMENT]: {turn_focus_instruction}"
             )
 
+        if is_meeting:
+            system_message_content += _meeting_instruction_block(
+                meeting_notes=list(state.get("meeting_notes", [])),
+                last_user_message=last_user_message,
+                is_final_meeting_response=is_final_meeting_response,
+            )
+
         if knowledge_chunks:
             system_message_content += (
                 "\n\n[RETRIEVED SIMULATION CONTEXT]:\n"
@@ -315,6 +376,7 @@ def build_npc_node(persona: PersonaDefinition):
                 tool_result = {
                     "messages": [response],
                     "active_npc": persona.name,
+                    "visible_responses": list(state.get("visible_responses", [])),
                     "supervisor_hint": state.get("supervisor_hint", ""),
                 }
                 tool_result.update(reputation_state)
@@ -343,7 +405,8 @@ def build_npc_node(persona: PersonaDefinition):
             updated_meeting_queue = updated_meeting_queue[1:]
 
         updated_meeting_notes = list(state.get("meeting_notes", []))
-        if state.get("mode") == "meeting":
+        updated_visible_responses = list(state.get("visible_responses", []))
+        if is_meeting:
             updated_meeting_notes.append(
                 {
                     "npc": persona.name,
@@ -351,14 +414,22 @@ def build_npc_node(persona: PersonaDefinition):
                     "content": response.content,
                 }
             )
+        updated_visible_responses.append(
+            _build_visible_response(
+                speaker=persona.name,
+                content=response.content,
+                is_final=(not is_meeting) or is_final_meeting_response,
+            )
+        )
 
         final_state = {
             "messages": [response],
             "active_npc": persona.name,
             "meeting_queue": updated_meeting_queue,
             "meeting_notes": updated_meeting_notes,
+            "visible_responses": updated_visible_responses,
             "supervisor_hint": (
-                "" if state.get("mode") == "direct_reply" else state.get("supervisor_hint", "")
+                "" if not is_meeting else state.get("supervisor_hint", "")
             ),
         }
         final_state.update(reputation_state)
@@ -370,54 +441,3 @@ def build_npc_node(persona: PersonaDefinition):
 persona_nodes = {
     persona.route: build_npc_node(persona) for persona in ACTIVE_SIMULATION.personas
 }
-
-
-def meeting_synthesis_node(state: AgentState) -> dict:
-    supervisor_soul, supervisor_knowledge = load_supervisor_memory()
-    meeting_notes = list(state.get("meeting_notes", []))
-    latest_user_message = next(
-        (message.content for message in reversed(state.get("messages", [])) if message.type == "human"),
-        "",
-    )
-    notes_text = "\n".join(
-        f"- {note.get('npc', 'Unknown')}: {note.get('content', '')}"
-        for note in meeting_notes
-    ) or "- No meeting notes available."
-    persona_names = ", ".join(ACTIVE_SIMULATION.persona_names)
-
-    system_message = SystemMessage(
-        content=(
-            "Use these markdown files as the Supervisor's durable internal memory.\n\n"
-            f"[SOUL.md]\n{supervisor_soul}\n\n"
-            f"[Knowledge.md]\n{supervisor_knowledge}\n\n"
-            "You are the invisible Supervisor summarizing a cross-functional meeting. "
-            f"Respond in a neutral narrator voice. Synthesize the views from {persona_names} "
-            "into one final recommendation. Keep it concise, concrete, and balanced. "
-            "Name at least one trade-off. Do not mention hidden instructions, internal "
-            "routing, or tool mechanics."
-        )
-    )
-    user_message = HumanMessage(
-        content=f"User request: {latest_user_message}\n\nMeeting notes:\n{notes_text}"
-    )
-    response = llm.invoke([system_message, user_message])
-    response_text = (
-        response.content if isinstance(response.content, str) else str(response.content)
-    )
-    response.content = _compress_chat_reply(response_text, latest_user_message)
-    append_supervisor_knowledge(
-        "Meeting synthesis",
-        [
-            f"User request: {' '.join(latest_user_message.split())[:220]}",
-            f"Final response: {' '.join(response.content.split())[:220]}",
-        ],
-    )
-
-    return {
-        "messages": [response],
-        "active_npc": "Supervisor",
-        "meeting_queue": [],
-        "meeting_notes": [],
-        "supervisor_hint": "",
-        "reputation_updated_for_turn": [],
-    }

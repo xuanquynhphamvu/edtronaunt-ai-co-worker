@@ -5,7 +5,7 @@ from langgraph.prebuilt import ToolNode
 
 from .agent import supervisor_plan_node
 from .simulation import ACTIVE_SIMULATION
-from .utils.nodes import ROUTE_BY_NPC, meeting_synthesis_node, persona_nodes, safety_node
+from .utils.nodes import ROUTE_BY_NPC, persona_nodes, safety_node
 from .utils.state import AgentState
 from .utils.tools import (
     add_jira_comment,
@@ -51,7 +51,7 @@ def agent_tools_router(state: AgentState) -> str:
             route = meeting_queue[0]
             if route in PERSONA_ROUTES:
                 return route
-        return "meeting_synthesis"
+        return "end"
     return "end"
 
 
@@ -64,7 +64,6 @@ workflow.add_node("safety", safety_node)
 workflow.add_node("supervisor_plan", supervisor_plan_node)
 for route, node in persona_nodes.items():
     workflow.add_node(route, node)
-workflow.add_node("meeting_synthesis", meeting_synthesis_node)
 workflow.add_node(
     "tools",
     ToolNode(
@@ -95,15 +94,13 @@ supervisor_edges["end"] = END
 workflow.add_conditional_edges("supervisor_plan", supervisor_router, supervisor_edges)
 
 persona_edges = {route: route for route in PERSONA_ROUTES}
-persona_edges.update({"tools": "tools", "meeting_synthesis": "meeting_synthesis", "end": END})
+persona_edges.update({"tools": "tools", "end": END})
 for route in PERSONA_ROUTES:
     workflow.add_conditional_edges(route, agent_tools_router, persona_edges)
 
 tool_edges = {route: route for route in PERSONA_ROUTES}
 tool_edges["end"] = END
 workflow.add_conditional_edges("tools", return_from_tools_router, tool_edges)
-
-workflow.add_edge("meeting_synthesis", END)
 
 engine = workflow.compile()
 
