@@ -10,7 +10,27 @@ load_dotenv()
 sys.path.append(os.path.join(os.path.dirname(__file__), "my-app"))
 from coworker_engine.engine import engine
 
+CASE_BRIEF = """
+Design a group-level leadership system for Gucci Group that preserves brand DNA, improves talent development
+and inter-brand mobility, and uses 360 feedback plus coaching to grow leaders. You are working inside a
+simulated cross-functional meeting with three AI stakeholders who will challenge the trade-off between brand
+identity, development impact, and regional rollout realism in your final recommendation.
+"""
+
+SUCCESS_CRITERIA = [
+    "Protect Gucci Group DNA while still enabling shared leadership language.",
+    "Show how the competency framework, 360 feedback, and coaching improve talent development and mobility.",
+    "Address regional rollout friction, stakeholder buy-in, and execution overhead.",
+    "Deliver a final recommendation that clearly balances brand DNA, development goals, and rollout realism.",
+]
+
 st.title("AI Co-worker Engine (LangGraph + Multi-Agent)")
+st.markdown(CASE_BRIEF)
+
+with st.sidebar:
+    st.markdown("### Success Criteria")
+    for item in SUCCESS_CRITERIA:
+        st.markdown(f"- {item}")
 
 # Chat history initialization
 if "messages" not in st.session_state:

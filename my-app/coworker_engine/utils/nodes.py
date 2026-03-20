@@ -1,4 +1,4 @@
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from .state import AgentState
 from dotenv import load_dotenv
@@ -199,6 +199,11 @@ def build_npc_node(prompt: str, npc_name: str, namespace: str):
             "sentences. Do not write a consultant-style memo. Do not give a multi-step framework "
             "unless the user explicitly asks for one. If the user asks a broad question, give the "
             "single most useful answer first.\n\n"
+            "This Gucci scenario is not only about describing a leadership model. When the user asks "
+            "for a recommendation, framework, or design, ground your answer in the real case tension: "
+            "protect brand DNA, improve talent development and inter-brand mobility, use 360 feedback "
+            "plus coaching credibly, and acknowledge regional rollout constraints. Do not pretend every "
+            "goal can be maximized at once; state at least one concrete trade-off when relevant.\n\n"
             "When the user asks about live tasks, comments, backlog, or status, use the Jira tools "
             "instead of guessing. When the user asks you to add a comment or update a task, use a tool "
             "to perform the action. Use your own namespace when calling retrieve_brand_data: "
@@ -258,8 +263,8 @@ def build_npc_node(prompt: str, npc_name: str, namespace: str):
     return node
 
 
-ceo_node = build_npc_node(CEO_PROMPT, "CEO", "namespace_ceo")
-chro_node = build_npc_node(CHRO_PROMPT, "CHRO", "namespace_chro")
+ceo_node = build_npc_node(CEO_PROMPT, "CEO", "ceo")
+chro_node = build_npc_node(CHRO_PROMPT, "CHRO", "chro")
 regional_node = build_npc_node(
-    REGIONAL_PROMPT, "Regional Manager", "namespace_regional"
+    REGIONAL_PROMPT, "Regional Manager", "regional"
 )
