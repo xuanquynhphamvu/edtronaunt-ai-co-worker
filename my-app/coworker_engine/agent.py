@@ -1,9 +1,10 @@
 from langchain_core.messages import SystemMessage
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
+import os
 from .utils.state import AgentState
 
-llm = ChatOllama(model="llama3", temperature=0.7)
+llm = ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:32b"), temperature=0.7)
 
 class RouterOutput(BaseModel):
     next_route: str = Field(description="The next agent to route to: 'ceo', 'chro', 'regional', or 'end' if everything is handled.")

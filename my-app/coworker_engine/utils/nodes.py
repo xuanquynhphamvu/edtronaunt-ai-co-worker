@@ -2,6 +2,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from .state import AgentState
 from dotenv import load_dotenv
+import os
 import re
 from .knowledge import format_knowledge_context, retrieve_knowledge
 from .tools import (
@@ -20,7 +21,7 @@ from ..personas.chro import CHRO_PROMPT
 from ..personas.regional import REGIONAL_PROMPT
 
 # Initialize Ollama model
-llm = ChatOllama(model="llama3", temperature=0.7)
+llm = ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:32b"), temperature=0.7)
 TOOL_CAPABLE_MODEL_PREFIXES = ("qwen", "mistral", "smollm", "gemma", "deepseek")
 
 # ─────────────────────────────────────────────
