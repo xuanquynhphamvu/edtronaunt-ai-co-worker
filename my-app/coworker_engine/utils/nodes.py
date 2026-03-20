@@ -278,6 +278,7 @@ def build_npc_node(persona: PersonaDefinition):
 
     def node(state: AgentState):
         full_history = list(state.get("messages", []))
+        session_id = str(state.get("session_id", "")).strip() or None
         last_user_message = next(
             (message.content for message in reversed(full_history) if message.type == "human"),
             "",
@@ -289,13 +290,19 @@ def build_npc_node(persona: PersonaDefinition):
             and len(current_meeting_queue) == 1
             and current_meeting_queue[0] == persona.route
         )
-        soul_markdown, knowledge_markdown = load_persona_memory(persona)
+        soul_markdown, knowledge_markdown = load_persona_memory(
+            persona,
+            session_id=session_id,
+        )
         reputation_state = _update_persona_reputation(
             state, persona.name, last_user_message.lower()
         )
         reputation = reputation_state["reputation"]
         knowledge_chunks = retrieve_knowledge(
-            last_user_message, namespaces=[persona.route], top_k=3
+            last_user_message,
+            namespaces=[persona.route],
+            top_k=3,
+            session_id=session_id,
         )
 
         if reputation >= 0.8:
@@ -372,6 +379,7 @@ def build_npc_node(persona: PersonaDefinition):
                         str(tool_call.get("name", "tool"))
                         for tool_call in getattr(response, "tool_calls", [])
                     ],
+                    session_id=session_id,
                 )
                 tool_result = {
                     "messages": [response],
@@ -394,6 +402,7 @@ def build_npc_node(persona: PersonaDefinition):
             user_message=last_user_message,
             agent_response=response.content,
             mode=state.get("mode", "direct_reply"),
+            session_id=session_id,
         )
 
         updated_meeting_queue = list(state.get("meeting_queue", []))

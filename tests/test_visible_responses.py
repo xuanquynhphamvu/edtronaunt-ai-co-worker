@@ -37,6 +37,7 @@ class FakeLLM:
 def _base_state(user_text: str) -> dict[str, object]:
     return {
         "messages": [HumanMessage(content=user_text)],
+        "session_id": "test-session",
         "reputation": 0.5,
         "alignment_score": 0.0,
         "persona_reputation": {},

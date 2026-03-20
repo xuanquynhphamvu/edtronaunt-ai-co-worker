@@ -17,7 +17,7 @@ Core behaviors implemented in the codebase:
 - A hidden Supervisor chooses between direct persona routing and a cross-functional meeting.
 - Personas maintain tone, role constraints, and lightweight reputation state.
 - Scenario knowledge is retrieved from a local knowledge base using simple vector-style similarity.
-- Agent identity and evolving memory are stored as markdown files in `agent_memory/`.
+- Agent identity is stored in shared markdown files, while evolving agent knowledge is session-scoped under `agent_memory/`.
 - Jira-style tool hooks are available for list/search/create/comment/status actions against a fake Jira backend.
 - Assistant responses can be saved as portfolio artifacts and exported as a PDF.
 - Safety checks block forbidden language such as wagering terms.
@@ -30,8 +30,8 @@ Typical end-to-end flow:
 2. A safety node checks for forbidden language.
 3. The Supervisor routes the request to one persona or to a meeting flow.
 4. The selected persona reads:
-   - its `SOUL.md`
-   - its `Knowledge.md`
+   - its shared `SOUL.md`
+   - its session `Knowledge.md`
    - recent conversation history
    - retrieved scenario knowledge
 5. The persona may call tools if the model supports tool calling.
@@ -71,7 +71,7 @@ flowchart TD
     K["agent_memory/*/SOUL.md"] --> D
     K --> E
     K --> F
-    L["agent_memory/*/Knowledge.md"] --> D
+    L["agent_memory/sessions/<session_id>/*/Knowledge.md"] --> D
     L --> E
     L --> F
 ```
@@ -137,16 +137,22 @@ Each agent now has two markdown files:
 - `SOUL.md`: stable identity, role, tone, and core instructions
 - `Knowledge.md`: evolving working memory and task journal
 
-Current seeded files live under:
+Shared baseline files live under:
 
 - [agent_memory/supervisor/SOUL.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/supervisor/SOUL.md)
-- [agent_memory/supervisor/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/supervisor/Knowledge.md)
 - [agent_memory/executive/SOUL.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/executive/SOUL.md)
-- [agent_memory/executive/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/executive/Knowledge.md)
 - [agent_memory/people/SOUL.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/people/SOUL.md)
-- [agent_memory/people/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/people/Knowledge.md)
 - [agent_memory/operations/SOUL.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/operations/SOUL.md)
+- [agent_memory/supervisor/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/supervisor/Knowledge.md)
+- [agent_memory/executive/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/executive/Knowledge.md)
+- [agent_memory/people/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/people/Knowledge.md)
 - [agent_memory/operations/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/operations/Knowledge.md)
+
+Current runtime behavior:
+
+- `SOUL.md` stays shared per persona and is reused across all sessions.
+- `Knowledge.md` is session-scoped for Streamlit conversations and is written under `agent_memory/sessions/<session_id>/<route>/Knowledge.md`.
+- The legacy shared `agent_memory/<route>/Knowledge.md` path still works as a fallback when no `session_id` is provided.
 
 How memory is used:
 
@@ -155,7 +161,9 @@ How memory is used:
 - task updates append to `Knowledge.md`
 - tool handoffs append to `Knowledge.md`
 - meeting synthesis appends to Supervisor `Knowledge.md`
-- retrieval also reads persona `Knowledge.md`, not just static Python chunks
+- retrieval reads the active session’s persona `Knowledge.md`, not just static Python chunks
+
+In the Streamlit app, `session_id` is derived from the per-session `thread_id`, so one browser session does not retrieve another session’s durable notes.
 
 You can relocate the memory directory with:
 
@@ -171,6 +179,7 @@ Important implementation details:
 
 - The base corpus is defined in Python as `KnowledgeChunk` records.
 - The system augments that corpus with each persona’s `Knowledge.md`.
+- When a `session_id` is provided, retrieval reads only that session’s dynamic `Knowledge.md` files.
 - Tokenization is a regex-based lowercase word split.
 - Embeddings are a hashed bag-of-words vector of size `512`.
 - If `faiss` is available, FAISS inner-product search is used.
@@ -260,11 +269,13 @@ These checks are applied:
 │   ├── executive/
 │   ├── operations/
 │   ├── people/
+│   ├── sessions/
 │   └── supervisor/
 ├── app.py
 ├── doc/
 │   ├── 01. AI Engineer Intern Take-home Assignment 2.0.pdf
-│   └── 08. HRM Talent & Leadership Development - Gucci 2.0.pdf
+│   ├── 08. HRM Talent & Leadership Development - Gucci 2.0.pdf
+│   └── daily-distill-feature-plan.md
 ├── exports/
 ├── langgraph.json
 ├── my-app/
@@ -521,14 +532,15 @@ The demo runner starts fake Jira automatically. If you need the API behavior in 
 Run the focused test suite:
 
 ```bash
-python -m unittest tests.test_agent_memory tests.test_portfolio tests.test_fake_jira
+python -m unittest tests.test_agent_memory tests.test_visible_responses tests.test_portfolio tests.test_fake_jira
 ```
 
 What is covered:
 
 - markdown file creation for agent memory
-- task updates appending into `Knowledge.md`
+- task updates appending into session-scoped `Knowledge.md`
 - retrieval including markdown-backed knowledge
+- isolation between session-specific knowledge stores
 - portfolio artifact registry behavior
 - export readiness gating
 - forbidden-language rejection
@@ -558,6 +570,7 @@ This section is intentionally blunt and based on the code as it exists now.
 - The one-command demo still depends on local Python packages plus a locally available Ollama model.
 - The default model target is large: `qwen2.5:32b`, which may be heavy for smaller machines.
 - The Streamlit app preserves chat history in `st.session_state`, but the LangGraph graph is compiled without a checkpointer, so there is no durable LangGraph thread memory across app restarts.
+- Session-scoped knowledge grows indefinitely right now; there is no TTL, pruning, archival, or distillation step yet.
 - The active simulation is hardcoded to one scenario in [simulation.py](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/my-app/coworker_engine/simulation.py).
 - Safety rules are keyword-based and intentionally narrow.
 - Tool usage depends on the selected Ollama model supporting tool calling behavior well enough in practice.
@@ -574,7 +587,8 @@ Update [simulation.py](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/m
 Then:
 
 - seed a corresponding `agent_memory/<route>/SOUL.md`
-- seed a corresponding `agent_memory/<route>/Knowledge.md`
+- allow the runtime to create `agent_memory/<route>/Knowledge.md` as the shared fallback
+- allow the runtime to create `agent_memory/sessions/<session_id>/<route>/Knowledge.md` for session-scoped memory
 - add any route-specific retrieval content if needed
 
 Because persona nodes are built dynamically from `ACTIVE_SIMULATION.personas`, most graph wiring updates happen automatically.
@@ -597,6 +611,10 @@ The current retrieval path is intentionally simple. A production upgrade would l
 - chunking external scenario documents
 - source provenance with richer metadata
 
+### Daily Distill Plan
+
+The current design does not yet promote session-scoped knowledge back into the shared persona baselines. The implementation plan for that feature is documented in [doc/daily-distill-feature-plan.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/doc/daily-distill-feature-plan.md).
+
 ## Design Notes
 
 A few notable design choices in the current implementation:
@@ -605,6 +623,7 @@ A few notable design choices in the current implementation:
 - Meeting synthesis is separate from persona turns so broad prompts can resolve into one combined recommendation.
 - Portfolio export is treated as a first-class workflow rather than a throwaway demo extra.
 - Agent memory now lives in editable markdown, which makes behavior easier to inspect and modify during development.
+- Shared persona identity and session-scoped persona knowledge are intentionally split so one Streamlit session does not pollute another.
 
 ## Repository Inputs
 
@@ -619,7 +638,7 @@ The active retrieval corpus currently references the first document and a reusab
 
 If you want to keep pushing this prototype, the highest-value next steps are:
 
-1. Add a bundled fake Jira service so tool flows are fully reproducible.
+1. Add daily distillation from session-scoped memory back into shared persona knowledge baselines.
 2. Move from hashed token vectors to true embeddings.
 3. Add durable graph-level conversation memory with a LangGraph checkpointer.
 4. Support multiple simulations and runtime scenario selection.

@@ -182,19 +182,25 @@ def _embed(text: str) -> np.ndarray:
     return vector
 
 
-def _dynamic_agent_knowledge_chunks() -> list[KnowledgeChunk]:
-    ensure_simulation_agent_files(ACTIVE_SIMULATION)
+def _dynamic_agent_knowledge_chunks(
+    *,
+    session_id: str | None = None,
+) -> list[KnowledgeChunk]:
+    ensure_simulation_agent_files(ACTIVE_SIMULATION, session_id=session_id)
 
     chunks: list[KnowledgeChunk] = []
     for persona in ACTIVE_SIMULATION.personas:
-        content = read_persona_knowledge_markdown(persona).strip()
+        content = read_persona_knowledge_markdown(persona, session_id=session_id).strip()
         if not content:
             continue
+        source = f"agent_memory/{persona.route}/Knowledge.md"
+        if session_id:
+            source = f"agent_memory/sessions/{session_id}/{persona.route}/Knowledge.md"
         chunks.append(
             KnowledgeChunk(
                 chunk_id=f"{persona.route}_knowledge_markdown",
                 namespace=persona.route,
-                source=f"agent_memory/{persona.route}/Knowledge.md",
+                source=source,
                 public_source=f"{persona.name} Knowledge.md",
                 title=f"{persona.name} working knowledge",
                 content=content,
@@ -203,8 +209,8 @@ def _dynamic_agent_knowledge_chunks() -> list[KnowledgeChunk]:
     return chunks
 
 
-def _all_knowledge_chunks() -> list[KnowledgeChunk]:
-    return BASE_KNOWLEDGE_CHUNKS + _dynamic_agent_knowledge_chunks()
+def _all_knowledge_chunks(*, session_id: str | None = None) -> list[KnowledgeChunk]:
+    return BASE_KNOWLEDGE_CHUNKS + _dynamic_agent_knowledge_chunks(session_id=session_id)
 
 
 def _search_indices(query_vector: np.ndarray, embeddings: np.ndarray, k: int) -> np.ndarray:
@@ -222,11 +228,13 @@ def retrieve_knowledge(
     query: str,
     namespaces: Iterable[str] | None = None,
     top_k: int = 3,
+    *,
+    session_id: str | None = None,
 ) -> list[KnowledgeChunk]:
     if not query.strip():
         return []
 
-    knowledge_chunks = _all_knowledge_chunks()
+    knowledge_chunks = _all_knowledge_chunks(session_id=session_id)
     if not knowledge_chunks:
         return []
 

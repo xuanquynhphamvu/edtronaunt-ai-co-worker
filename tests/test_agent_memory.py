@@ -47,22 +47,29 @@ class AgentMemoryTests(unittest.TestCase):
     def test_task_updates_append_to_knowledge_markdown(self) -> None:
         persona = ACTIVE_SIMULATION.personas[1]
         unique_phrase = "people-adoption-signal-2049"
+        session_id = "session-a"
 
-        ensure_persona_files(persona)
+        ensure_persona_files(persona, session_id=session_id)
         append_persona_knowledge(
             persona,
             title="Task update",
             user_message=f"Please address {unique_phrase}",
             agent_response="Use manager coaching during the pilot to lower onboarding risk.",
             mode="direct_reply",
+            session_id=session_id,
         )
 
-        _, knowledge_markdown = load_persona_memory(persona, max_knowledge_chars=None)
+        _, knowledge_markdown = load_persona_memory(
+            persona,
+            session_id=session_id,
+            max_knowledge_chars=None,
+        )
         self.assertIn("Task update", knowledge_markdown)
         self.assertIn(unique_phrase, knowledge_markdown)
 
     def test_retrieve_knowledge_includes_markdown_backed_agent_memory(self) -> None:
-        ensure_simulation_agent_files(ACTIVE_SIMULATION)
+        session_id = "ops-session"
+        ensure_simulation_agent_files(ACTIVE_SIMULATION, session_id=session_id)
         persona = next(
             persona for persona in ACTIVE_SIMULATION.personas if persona.route == "operations"
         )
@@ -74,14 +81,74 @@ class AgentMemoryTests(unittest.TestCase):
             user_message=f"Track {unique_phrase} before the regional launch.",
             agent_response="Gate rollout on local staffing readiness and sequence the pilot first.",
             mode="meeting",
+            session_id=session_id,
         )
 
-        chunks = retrieve_knowledge(unique_phrase, namespaces=[persona.route], top_k=5)
+        chunks = retrieve_knowledge(
+            unique_phrase,
+            namespaces=[persona.route],
+            top_k=5,
+            session_id=session_id,
+        )
 
         self.assertTrue(
             any(unique_phrase in chunk.content for chunk in chunks),
             "Expected markdown-backed Knowledge.md content to be retrievable.",
         )
+
+    def test_session_scoped_knowledge_is_isolated(self) -> None:
+        persona = ACTIVE_SIMULATION.personas[0]
+        alpha_phrase = "session-alpha-marker-811"
+        beta_phrase = "session-beta-marker-992"
+
+        append_persona_knowledge(
+            persona,
+            title="Task update",
+            user_message=alpha_phrase,
+            agent_response="Alpha response",
+            mode="direct_reply",
+            session_id="alpha",
+        )
+        append_persona_knowledge(
+            persona,
+            title="Task update",
+            user_message=beta_phrase,
+            agent_response="Beta response",
+            mode="direct_reply",
+            session_id="beta",
+        )
+
+        _, alpha_knowledge = load_persona_memory(
+            persona,
+            session_id="alpha",
+            max_knowledge_chars=None,
+        )
+        _, beta_knowledge = load_persona_memory(
+            persona,
+            session_id="beta",
+            max_knowledge_chars=None,
+        )
+
+        self.assertIn(alpha_phrase, alpha_knowledge)
+        self.assertNotIn(beta_phrase, alpha_knowledge)
+        self.assertIn(beta_phrase, beta_knowledge)
+        self.assertNotIn(alpha_phrase, beta_knowledge)
+
+        alpha_chunks = retrieve_knowledge(
+            alpha_phrase,
+            namespaces=[persona.route],
+            top_k=5,
+            session_id="alpha",
+        )
+        beta_chunks = retrieve_knowledge(
+            alpha_phrase,
+            namespaces=[persona.route],
+            top_k=5,
+            session_id="beta",
+        )
+
+        self.assertTrue(any(alpha_phrase in chunk.content for chunk in alpha_chunks))
+        self.assertFalse(any(alpha_phrase in chunk.content for chunk in beta_chunks))
 
 
 if __name__ == "__main__":

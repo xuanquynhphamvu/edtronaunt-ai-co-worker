@@ -354,7 +354,10 @@ def main() -> None:
         _append_message("user", prompt)
         _render_chat_message(st.session_state.messages[-1], _message_id(st.session_state.messages[-1], len(st.session_state.messages) - 1))
 
-        input_state = {"messages": _to_langchain_messages(st.session_state.messages)}
+        input_state = {
+            "messages": _to_langchain_messages(st.session_state.messages),
+            "session_id": st.session_state.thread_id,
+        }
         config = {"configurable": {"thread_id": st.session_state.thread_id}}
         final_state = engine.invoke(input_state, config=config)
 

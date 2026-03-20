@@ -67,7 +67,8 @@ def _route_prompt_fragment() -> str:
 
 
 def supervisor_plan_node(state: AgentState):
-    supervisor_soul, supervisor_knowledge = load_supervisor_memory()
+    session_id = str(state.get("session_id", "")).strip() or None
+    supervisor_soul, supervisor_knowledge = load_supervisor_memory(session_id=session_id)
     messages = state.get("messages", [])
     last_message = messages[-1] if messages else None
     user_text = last_message.content if last_message and last_message.type == "human" else ""
@@ -92,6 +93,7 @@ def supervisor_plan_node(state: AgentState):
                 f"User request: {' '.join(user_text.split())[:220]}",
                 f"Target route: {explicit_route}",
             ],
+            session_id=session_id,
         )
         return {
             "active_npc": "Supervisor",
@@ -116,6 +118,7 @@ def supervisor_plan_node(state: AgentState):
                 f"User request: {' '.join(user_text.split())[:220]}",
                 "Target route: end",
             ],
+            session_id=session_id,
         )
         return {
             "active_npc": "Supervisor",
@@ -169,6 +172,7 @@ def supervisor_plan_node(state: AgentState):
             f"Target route: {target_npc or next_route}",
             f"Supervisor hint: {supervisor_hint or 'none'}",
         ],
+        session_id=session_id,
     )
 
     return {

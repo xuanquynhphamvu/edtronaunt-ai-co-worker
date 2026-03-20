@@ -34,6 +34,10 @@ def agent_memory_root() -> Path:
     return _project_root() / "agent_memory"
 
 
+def _session_memory_root(session_id: str) -> Path:
+    return agent_memory_root() / "sessions" / _slug(session_id)
+
+
 def _slug(value: str) -> str:
     slug = SAFE_SLUG_RE.sub("-", value.strip().lower()).strip("-")
     return slug or "agent"
@@ -82,24 +86,42 @@ def _default_knowledge(name: str) -> str:
     )
 
 
-def _persona_files(persona: PersonaDefinition) -> AgentMemoryFiles:
-    directory = agent_memory_root() / _slug(persona.route)
+def _shared_persona_directory(persona: PersonaDefinition) -> Path:
+    return agent_memory_root() / _slug(persona.route)
+
+
+def _shared_supervisor_directory() -> Path:
+    return agent_memory_root() / "supervisor"
+
+
+def _persona_files(
+    persona: PersonaDefinition,
+    *,
+    session_id: str | None = None,
+) -> AgentMemoryFiles:
+    shared_directory = _shared_persona_directory(persona)
+    directory = (
+        _session_memory_root(session_id) / _slug(persona.route)
+        if session_id
+        else shared_directory
+    )
     return AgentMemoryFiles(
         route=persona.route,
         name=persona.name,
         directory=directory,
-        soul_path=directory / "SOUL.md",
+        soul_path=shared_directory / "SOUL.md",
         knowledge_path=directory / "Knowledge.md",
     )
 
 
-def supervisor_files() -> AgentMemoryFiles:
-    directory = agent_memory_root() / "supervisor"
+def supervisor_files(*, session_id: str | None = None) -> AgentMemoryFiles:
+    shared_directory = _shared_supervisor_directory()
+    directory = _session_memory_root(session_id) / "supervisor" if session_id else shared_directory
     return AgentMemoryFiles(
         route="supervisor",
         name="Supervisor",
         directory=directory,
-        soul_path=directory / "SOUL.md",
+        soul_path=shared_directory / "SOUL.md",
         knowledge_path=directory / "Knowledge.md",
     )
 
@@ -110,24 +132,32 @@ def _ensure_file(path: Path, default_text: str) -> None:
         path.write_text(default_text, encoding="utf-8")
 
 
-def ensure_persona_files(persona: PersonaDefinition) -> AgentMemoryFiles:
-    files = _persona_files(persona)
+def ensure_persona_files(
+    persona: PersonaDefinition,
+    *,
+    session_id: str | None = None,
+) -> AgentMemoryFiles:
+    files = _persona_files(persona, session_id=session_id)
     _ensure_file(files.soul_path, _default_persona_soul(persona))
     _ensure_file(files.knowledge_path, _default_knowledge(persona.name))
     return files
 
 
-def ensure_supervisor_files() -> AgentMemoryFiles:
-    files = supervisor_files()
+def ensure_supervisor_files(*, session_id: str | None = None) -> AgentMemoryFiles:
+    files = supervisor_files(session_id=session_id)
     _ensure_file(files.soul_path, _default_supervisor_soul())
     _ensure_file(files.knowledge_path, _default_knowledge(files.name))
     return files
 
 
-def ensure_simulation_agent_files(simulation: SimulationDefinition) -> None:
-    ensure_supervisor_files()
+def ensure_simulation_agent_files(
+    simulation: SimulationDefinition,
+    *,
+    session_id: str | None = None,
+) -> None:
+    ensure_supervisor_files(session_id=session_id)
     for persona in simulation.personas:
-        ensure_persona_files(persona)
+        ensure_persona_files(persona, session_id=session_id)
 
 
 def _read_text(path: Path) -> str:
@@ -150,9 +180,10 @@ def _trim_for_prompt(text: str, max_chars: int | None) -> str:
 def load_persona_memory(
     persona: PersonaDefinition,
     *,
+    session_id: str | None = None,
     max_knowledge_chars: int | None = PROMPT_KNOWLEDGE_CHAR_LIMIT,
 ) -> tuple[str, str]:
-    files = ensure_persona_files(persona)
+    files = ensure_persona_files(persona, session_id=session_id)
     return _read_text(files.soul_path), _trim_for_prompt(
         _read_text(files.knowledge_path), max_knowledge_chars
     )
@@ -160,16 +191,21 @@ def load_persona_memory(
 
 def load_supervisor_memory(
     *,
+    session_id: str | None = None,
     max_knowledge_chars: int | None = PROMPT_KNOWLEDGE_CHAR_LIMIT,
 ) -> tuple[str, str]:
-    files = ensure_supervisor_files()
+    files = ensure_supervisor_files(session_id=session_id)
     return _read_text(files.soul_path), _trim_for_prompt(
         _read_text(files.knowledge_path), max_knowledge_chars
     )
 
 
-def read_persona_knowledge_markdown(persona: PersonaDefinition) -> str:
-    files = ensure_persona_files(persona)
+def read_persona_knowledge_markdown(
+    persona: PersonaDefinition,
+    *,
+    session_id: str | None = None,
+) -> str:
+    files = ensure_persona_files(persona, session_id=session_id)
     return _read_text(files.knowledge_path)
 
 
@@ -180,8 +216,13 @@ def _excerpt(text: str, max_chars: int = 220) -> str:
     return compact[: max_chars - 3].rstrip() + "..."
 
 
-def append_supervisor_knowledge(title: str, lines: list[str]) -> None:
-    files = ensure_supervisor_files()
+def append_supervisor_knowledge(
+    title: str,
+    lines: list[str],
+    *,
+    session_id: str | None = None,
+) -> None:
+    files = ensure_supervisor_files(session_id=session_id)
     _append_knowledge_entry(files, title=title, lines=lines)
 
 
@@ -192,8 +233,9 @@ def append_persona_knowledge(
     user_message: str,
     agent_response: str,
     mode: str,
+    session_id: str | None = None,
 ) -> None:
-    files = ensure_persona_files(persona)
+    files = ensure_persona_files(persona, session_id=session_id)
     _append_knowledge_entry(
         files,
         title=title,
@@ -210,8 +252,9 @@ def append_persona_tool_handoff(
     *,
     user_message: str,
     tool_names: list[str],
+    session_id: str | None = None,
 ) -> None:
-    files = ensure_persona_files(persona)
+    files = ensure_persona_files(persona, session_id=session_id)
     _append_knowledge_entry(
         files,
         title="Tool handoff",
