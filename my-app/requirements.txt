@@ -4,3 +4,4 @@ langchain-ollama
 langgraph
 faiss-cpu
 python-dotenv
+reportlab

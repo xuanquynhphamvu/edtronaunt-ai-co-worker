@@ -2,29 +2,36 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 
 from .utils.state import AgentState
-from .utils.nodes import ceo_node, chro_node, regional_node, safety_node, reputation_node
-from .agent import supervisor_node
+from .utils.nodes import ceo_node, chro_node, regional_node, safety_node, meeting_synthesis_node
+from .agent import supervisor_plan_node
 from .utils.tools import (
     add_jira_comment,
     calculate_kpi,
+    create_jira_task,
     list_jira_tasks,
     retrieve_brand_data,
     search_jira_tasks,
     update_jira_status,
 )
 
-def supervisor_router(state: AgentState) -> str:
-    """Reads the supervisor's decision to route to the correct agent."""
-    route = state.get("next_route", "end")
-    if route not in ["ceo", "chro", "regional"]:
-        return "end"
-    return route
-
 def safety_router(state: AgentState) -> str:
     """After safety_node: if flags were raised, go directly to END; otherwise continue."""
     if state.get("safety_flags"):
         return "end"
-    return "reputation"
+    return "supervisor_plan"
+
+
+def supervisor_router(state: AgentState) -> str:
+    mode = state.get("mode", "")
+    if mode == "direct_reply":
+        route = state.get("target_npc", "end")
+        return route if route in ["ceo", "chro", "regional"] else "end"
+
+    meeting_queue = state.get("meeting_queue", [])
+    if meeting_queue:
+        route = meeting_queue[0]
+        return route if route in ["ceo", "chro", "regional"] else "end"
+    return "end"
 
 
 def agent_tools_router(state: AgentState) -> str:
@@ -32,6 +39,14 @@ def agent_tools_router(state: AgentState) -> str:
     last_message = messages[-1] if messages else None
     if getattr(last_message, "tool_calls", None):
         return "tools"
+
+    if state.get("mode") == "meeting":
+        meeting_queue = state.get("meeting_queue", [])
+        if meeting_queue:
+            route = meeting_queue[0]
+            if route in ["ceo", "chro", "regional"]:
+                return route
+        return "meeting_synthesis"
     return "end"
 
 
@@ -50,11 +65,11 @@ workflow = StateGraph(AgentState)
 
 # 2. Add all Nodes
 workflow.add_node("safety", safety_node)
-workflow.add_node("reputation", reputation_node)
-workflow.add_node("supervisor", supervisor_node)
+workflow.add_node("supervisor_plan", supervisor_plan_node)
 workflow.add_node("ceo", ceo_node)
 workflow.add_node("chro", chro_node)
 workflow.add_node("regional", regional_node)
+workflow.add_node("meeting_synthesis", meeting_synthesis_node)
 workflow.add_node(
     "tools",
     ToolNode(
@@ -63,6 +78,7 @@ workflow.add_node(
             retrieve_brand_data,
             list_jira_tasks,
             search_jira_tasks,
+            create_jira_task,
             add_jira_comment,
             update_jira_status,
         ]
@@ -70,27 +86,24 @@ workflow.add_node(
 )
 
 # ── Execution Order ──────────────────────────────────────────
-# START → safety → (blocked? END) → reputation → supervisor → NPCs → END
+# START → safety → supervisor_plan → (direct NPC | meeting queue) → synthesis/end
 
 # Step 1: Safety check always runs first
 workflow.add_edge(START, "safety")
 
-# Step 2: Safety router — short-circuit to END if blocked, else update reputation
+# Step 2: Safety router — short-circuit to END if blocked, else plan the turn
 workflow.add_conditional_edges(
     "safety",
     safety_router,
     {
-        "reputation": "reputation",
+        "supervisor_plan": "supervisor_plan",
         "end": END,
     }
 )
 
-# Step 3: Reputation update, then hand off to supervisor
-workflow.add_edge("reputation", "supervisor")
-
-# Step 4: Supervisor routes to the correct NPC agent
+# Step 3: Supervisor routes to a direct NPC or starts the meeting queue
 workflow.add_conditional_edges(
-    "supervisor",
+    "supervisor_plan",
     supervisor_router,
     {
         "ceo": "ceo",
@@ -100,12 +113,16 @@ workflow.add_conditional_edges(
     }
 )
 
-# Step 5: Agents either call tools or finish
+# Step 4: Agents either call tools, continue the meeting, synthesize, or finish
 workflow.add_conditional_edges(
     "ceo",
     agent_tools_router,
     {
         "tools": "tools",
+        "ceo": "ceo",
+        "chro": "chro",
+        "regional": "regional",
+        "meeting_synthesis": "meeting_synthesis",
         "end": END,
     }
 )
@@ -114,6 +131,10 @@ workflow.add_conditional_edges(
     agent_tools_router,
     {
         "tools": "tools",
+        "ceo": "ceo",
+        "chro": "chro",
+        "regional": "regional",
+        "meeting_synthesis": "meeting_synthesis",
         "end": END,
     }
 )
@@ -122,11 +143,15 @@ workflow.add_conditional_edges(
     agent_tools_router,
     {
         "tools": "tools",
+        "ceo": "ceo",
+        "chro": "chro",
+        "regional": "regional",
+        "meeting_synthesis": "meeting_synthesis",
         "end": END,
     }
 )
 
-# Step 6: Tool results return to the same active NPC for final response
+# Step 5: Tool results return to the same active NPC for final response
 workflow.add_conditional_edges(
     "tools",
     return_from_tools_router,
@@ -138,9 +163,9 @@ workflow.add_conditional_edges(
     }
 )
 
-# 5. Compile into runnable Langchain graph
-# Note: When using `langgraph dev` or LangSmith Studio, 
-# persistence is handled automatically by the platform.
+# Step 6: Meeting synthesis ends the turn
+workflow.add_edge("meeting_synthesis", END)
+
 engine = workflow.compile()
 
 # Example Usage
