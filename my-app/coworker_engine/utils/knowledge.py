@@ -33,7 +33,7 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
     KnowledgeChunk(
         chunk_id="assignment_mission",
         namespace="shared",
-        source="01. AI Engineer Intern Take-home Assignment 2.0.pdf",
+        source="01. Engineering Simulation Design Brief.pdf",
         public_source="Simulation design brief",
         title="Assignment mission",
         content=(
@@ -45,11 +45,11 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
     KnowledgeChunk(
         chunk_id="assignment_scope",
         namespace="shared",
-        source="01. AI Engineer Intern Take-home Assignment 2.0.pdf",
+        source="01. Engineering Simulation Design Brief.pdf",
         public_source="Simulation design brief",
         title="Assignment scope and stack",
         content=(
-            "The take-home expects Python plus an orchestration layer such as LangChain or "
+            "The project expects Python plus an orchestration layer such as LangChain or "
             "LangGraph, one vector store such as FAISS, and a feasible engineering plan. "
             "The solution should scale across simulations, not only a single branded case."
         ),
@@ -57,7 +57,7 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
     KnowledgeChunk(
         chunk_id="assignment_persona_state",
         namespace="shared",
-        source="01. AI Engineer Intern Take-home Assignment 2.0.pdf",
+        source="01. Engineering Simulation Design Brief.pdf",
         public_source="Simulation design brief",
         title="Persona and state deliverables",
         content=(
@@ -69,7 +69,7 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
     KnowledgeChunk(
         chunk_id="assignment_architecture",
         namespace="shared",
-        source="01. AI Engineer Intern Take-home Assignment 2.0.pdf",
+        source="01. Engineering Simulation Design Brief.pdf",
         public_source="Simulation design brief",
         title="Architecture deliverables",
         content=(
@@ -81,7 +81,7 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
     KnowledgeChunk(
         chunk_id="assignment_supervisor",
         namespace="shared",
-        source="01. AI Engineer Intern Take-home Assignment 2.0.pdf",
+        source="01. Engineering Simulation Design Brief.pdf",
         public_source="Simulation design brief",
         title="Supervisor agent requirement",
         content=(
@@ -93,7 +93,7 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
     KnowledgeChunk(
         chunk_id="assignment_eval",
         namespace="shared",
-        source="01. AI Engineer Intern Take-home Assignment 2.0.pdf",
+        source="01. Engineering Simulation Design Brief.pdf",
         public_source="Simulation design brief",
         title="Evaluation criteria",
         content=(
@@ -154,7 +154,7 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
     KnowledgeChunk(
         chunk_id="tools_guardrails",
         namespace="shared",
-        source="01. AI Engineer Intern Take-home Assignment 2.0.pdf",
+        source="01. Engineering Simulation Design Brief.pdf",
         public_source="Simulation design brief",
         title="In-simulation tools and guardrails",
         content=(

@@ -18,7 +18,7 @@ Expected tools:
 
 Use this opening:
 
-> Today we are framing the leadership problem and defining Gucci Group's leadership DNA. In this version of the session, we will not only align on the content. We will also capture concrete follow-up actions in Jira so the work can move immediately after the workshop.
+> Today we are framing the leadership problem and defining The Company Group's leadership DNA. In this version of the session, we will not only align on the content. We will also capture concrete follow-up actions in Jira so the work can move immediately after the workshop.
 
 > As we go, we will save the working content into the portfolio pack and log operational actions into Jira. Portfolio captures hold the narrative. Jira holds the execution follow-through.
 

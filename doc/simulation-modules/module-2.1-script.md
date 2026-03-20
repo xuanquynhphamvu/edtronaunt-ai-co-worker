@@ -4,13 +4,12 @@
 
 Duration: 35-45 minutes
 
-Objective: Align on the leadership problem Gucci Group is solving, define the first-pass "Group DNA" themes, and identify the priority use cases for the competency model.
+Objective: Align on the leadership problem The Company Group is solving, define the first-pass "Group DNA" themes, and identify the priority use cases for the competency model.
 
-Sample result:
-- [module-2.1-sample-result.pdf](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/doc/simulation-modules/module-2.1-sample-result.pdf)
+
 
 Inputs:
-- Gucci context
+- The Company context
 - Brand list
 - Examples of leadership behaviors
 
@@ -19,13 +18,13 @@ Deliverables:
 - Competency matrix (CSV) with 4 themes x 3 levels
 - 10-slide CEO pack
 
-Grounding: This module should stay anchored in the bespoke Gucci Group context and the four headline themes: Vision, Entrepreneurship, Passion, Trust.
+Grounding: This module should stay anchored in the bespoke The Company Group context and the four headline themes: Vision, Entrepreneurship, Passion, Trust.
 
 ## Moderator Opening
 
 Use this opening to frame the session:
 
-> Today we are framing the leadership problem and defining Gucci Group's leadership DNA. The aim is not to finish the entire competency model in one session. The aim is to align on the problem statement, extract the Group DNA themes, and identify where the model will be used first across the Group.
+> Today we are framing the leadership problem and defining The Company Group's leadership DNA. The aim is not to finish the entire competency model in one session. The aim is to align on the problem statement, extract the Group DNA themes, and identify where the model will be used first across the Group.
 
 > We are working on a core tension: how do we preserve brand autonomy while building stronger Group-wide capability in areas like mobility, pipeline strength, leadership consistency, and talent development?
 
@@ -130,7 +129,7 @@ Follow-up prompts:
 - For each theme, what are 2 to 3 behaviors leaders should demonstrate?
 - How should those behaviors differ across three leadership levels?
 - Which behaviors are essential, observable, and practical for assessment?
-- What makes this distinctly Gucci Group rather than a generic framework?
+- What makes this distinctly The Company Group rather than a generic framework?
 
 Capture:
 - Final Plan

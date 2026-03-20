@@ -4,9 +4,9 @@
 
 Add a daily distillation job that converts session-scoped knowledge into durable shared persona knowledge baselines for:
 
-- [agent_memory/executive/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/executive/Knowledge.md)
-- [agent_memory/people/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/people/Knowledge.md)
-- [agent_memory/operations/Knowledge.md](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/agent_memory/operations/Knowledge.md)
+- [agent_memory/executive/Knowledge.md](../agent_memory/executive/Knowledge.md)
+- [agent_memory/people/Knowledge.md](../agent_memory/people/Knowledge.md)
+- [agent_memory/operations/Knowledge.md](../agent_memory/operations/Knowledge.md)
 
 The purpose is to preserve durable cross-session learnings without letting raw per-session notes leak directly into every future conversation.
 
