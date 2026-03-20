@@ -109,6 +109,23 @@ def update_jira_task(task_id: int, *, title: str | None = None, description: str
     return data
 
 
+def create_jira_task_entry(title: str, description: str, status: str = "todo") -> dict[str, Any]:
+    response = requests.post(
+        _jira_url("/tasks"),
+        json={
+            "title": title,
+            "description": description,
+            "status": status,
+        },
+        timeout=5,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, dict):
+        raise ValueError("Unexpected Jira create response")
+    return data
+
+
 def add_jira_comment_entry(task_id: int, agent_id: str, body: str) -> dict[str, Any]:
     response = requests.post(
         _jira_url(f"/tasks/{task_id}/comments"),
@@ -290,4 +307,14 @@ def update_jira_status(task_id: int, status: str) -> str:
         task = update_jira_task(task_id, status=status)
     except Exception as exc:
         return f"Failed to update Jira task: {exc}"
+    return _format_task(task)
+
+
+@tool
+def create_jira_task(title: str, description: str, status: str = "todo") -> str:
+    """Create a fake Jira task with a title, description, and optional status."""
+    try:
+        task = create_jira_task_entry(title=title, description=description, status=status)
+    except Exception as exc:
+        return f"Failed to create Jira task: {exc}"
     return _format_task(task)
