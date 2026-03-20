@@ -257,7 +257,7 @@ def calculate_kpi(brand_name: str, metric: str) -> str:
     return f"{metric} for {brand_name} is performing at 110% of target."
 
 @tool
-def retrieve_brand_data(namespace: str, query: str) -> str:
+def retrieve_simulation_context(namespace: str, query: str) -> str:
     """Retrieve simulation context scoped to the given namespace."""
     chunks = retrieve_knowledge(query, namespaces=[namespace], top_k=3)
     if not chunks:

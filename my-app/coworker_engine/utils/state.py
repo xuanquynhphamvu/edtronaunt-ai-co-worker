@@ -26,7 +26,7 @@ class AgentState(TypedDict):
     session_id: str            # Unique ID for the current interaction session
     safety_flags: list[str]    # Flags caught by the pre-LLM safety check
     mode: str                  # direct_reply | meeting
-    target_npc: str            # ceo | chro | regional for direct reply
+    target_npc: str            # configured persona route for direct reply
     meeting_queue: list[str]   # Remaining meeting participants in order
     meeting_notes: list[MeetingNote]
     final_response_mode: str

@@ -4,8 +4,12 @@ from dataclasses import dataclass
 import re
 from typing import Iterable
 
-import faiss
 import numpy as np
+
+try:
+    import faiss  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - exercised indirectly in tests
+    faiss = None
 
 
 WORD_RE = re.compile(r"[a-z0-9']+")
@@ -44,7 +48,7 @@ KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
         content=(
             "The take-home expects Python plus an orchestration layer such as LangChain or "
             "LangGraph, one vector store such as FAISS, and a feasible engineering plan. "
-            "The solution should scale across simulations, not only a single Gucci case."
+            "The solution should scale across simulations, not only a single branded case."
         ),
     ),
     KnowledgeChunk(
@@ -96,56 +100,55 @@ KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
         ),
     ),
     KnowledgeChunk(
-        chunk_id="gucci_overview",
+        chunk_id="simulation_overview",
         namespace="shared",
-        source="08. HRM Talent & Leadership Development - Gucci 2.0.pdf",
-        public_source="Scenario brief",
-        title="Gucci simulation overview",
+        source="Reusable simulation starter brief",
+        public_source="Scenario starter",
+        title="Cross-functional rollout scenario",
         content=(
-            "The simulation asks the learner to design a group-level leadership system across "
-            "luxury brands. The system should codify shared Group DNA, evaluate and grow leaders "
-            "through 360 feedback plus coaching, and roll out across regions without diluting "
-            "brand identities."
+            "The learner is designing a company-wide initiative that must balance strategic "
+            "consistency, people adoption, and operational realism. A strong answer names the "
+            "trade-offs, clarifies scope, and shows how the plan will actually be implemented."
         ),
     ),
     KnowledgeChunk(
-        chunk_id="gucci_ceo",
-        namespace="ceo",
-        source="08. HRM Talent & Leadership Development - Gucci 2.0.pdf",
-        public_source="Scenario brief",
-        title="CEO role context",
+        chunk_id="executive_context",
+        namespace="executive",
+        source="Reusable simulation starter brief",
+        public_source="Scenario starter",
+        title="Executive sponsor context",
         content=(
-            "The Gucci Group CEO defends Group DNA, mission, company culture, and the tension "
-            "between brand autonomy and group needs. This role should push back on generic "
-            "group-wide ideas that weaken brand identity or heritage."
+            "The Executive Sponsor is responsible for business direction, sequencing, and "
+            "decision quality. This role pushes back on proposals that increase scope, add "
+            "governance overhead, or fail to define a clear outcome and ownership model."
         ),
     ),
     KnowledgeChunk(
-        chunk_id="gucci_chro",
-        namespace="chro",
-        source="08. HRM Talent & Leadership Development - Gucci 2.0.pdf",
-        public_source="Scenario brief",
-        title="CHRO role context",
+        chunk_id="people_context",
+        namespace="people",
+        source="Reusable simulation starter brief",
+        public_source="Scenario starter",
+        title="People lead context",
         content=(
-            "The Gucci Group CHRO focuses on identifying and developing talent, increasing "
-            "inter-brand mobility, and supporting rather than imposing on brand DNA. The "
-            "competency framework includes Vision, Entrepreneurship, Passion, and Trust."
+            "The People Lead focuses on change adoption, role clarity, capability building, "
+            "training burden, and sustainable behavior change. This role challenges plans that "
+            "add process without a concrete adoption mechanism or measurable value."
         ),
     ),
     KnowledgeChunk(
-        chunk_id="gucci_regional",
-        namespace="regional",
-        source="08. HRM Talent & Leadership Development - Gucci 2.0.pdf",
-        public_source="Scenario brief",
-        title="Regional manager context",
+        chunk_id="operations_context",
+        namespace="operations",
+        source="Reusable simulation starter brief",
+        public_source="Scenario starter",
+        title="Regional operations context",
         content=(
-            "The Employer Branding and Internal Communications Regional Manager provides regional "
-            "insights about current status, adoption challenges, training needs, stakeholder "
-            "buy-in, rollout friction, and local implementation overhead."
+            "The Regional Operations Lead provides local delivery realism, sequencing constraints, "
+            "staffing pressure, and rollout risk. This role highlights where central plans ignore "
+            "implementation capacity, market timing, or uneven readiness across teams."
         ),
     ),
     KnowledgeChunk(
-        chunk_id="gucci_tools_guardrails",
+        chunk_id="tools_guardrails",
         namespace="shared",
         source="01. AI Engineer Intern Take-home Assignment 2.0.pdf",
         public_source="Simulation design brief",
@@ -175,9 +178,19 @@ def _embed(text: str) -> np.ndarray:
     return vector
 
 
-_INDEX = faiss.IndexFlatIP(EMBED_DIM)
 _EMBEDDINGS = np.vstack([_embed(chunk.content) for chunk in KNOWLEDGE_CHUNKS])
-_INDEX.add(_EMBEDDINGS)
+_INDEX = faiss.IndexFlatIP(EMBED_DIM) if faiss is not None else None
+if _INDEX is not None:
+    _INDEX.add(_EMBEDDINGS)
+
+
+def _search_indices(query_vector: np.ndarray, k: int) -> np.ndarray:
+    if _INDEX is not None:
+        _, indices = _INDEX.search(query_vector.reshape(1, -1), k)
+        return indices[0]
+
+    scores = _EMBEDDINGS @ query_vector
+    return np.argsort(scores)[::-1][:k]
 
 
 def retrieve_knowledge(
@@ -190,14 +203,14 @@ def retrieve_knowledge(
 
     requested = set(namespaces or [])
     query_tokens = set(_tokenize(query))
-    query_vector = _embed(query).reshape(1, -1)
+    query_vector = _embed(query)
 
     k = min(len(KNOWLEDGE_CHUNKS), max(top_k * 3, top_k))
-    _, indices = _INDEX.search(query_vector, k)
+    indices = _search_indices(query_vector, k)
 
     scored: list[tuple[float, KnowledgeChunk]] = []
-    for idx in indices[0]:
-        chunk = KNOWLEDGE_CHUNKS[idx]
+    for idx in indices:
+        chunk = KNOWLEDGE_CHUNKS[int(idx)]
         if requested and chunk.namespace not in requested and chunk.namespace != "shared":
             continue
 

@@ -1,5 +1,5 @@
 import streamlit as st
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from dotenv import load_dotenv
 import sys
 import os
@@ -11,6 +11,7 @@ load_dotenv()
 # Add my-app folder to sys path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "my-app"))
 from coworker_engine.engine import engine
+from coworker_engine.simulation import ACTIVE_SIMULATION
 from coworker_engine.utils.portfolio import (
     PORTFOLIO_EXPORT_SESSION_KEY,
     PortfolioError,
@@ -18,20 +19,6 @@ from coworker_engine.utils.portfolio import (
     get_portfolio_status,
     save_portfolio_artifact,
 )
-
-CASE_BRIEF = """
-Design a group-level leadership system for Gucci Group that preserves brand DNA, improves talent development
-and inter-brand mobility, and uses 360 feedback plus coaching to grow leaders. You are working inside a
-simulated cross-functional meeting with three AI stakeholders who will challenge the trade-off between brand
-identity, development impact, and regional rollout realism in your final recommendation.
-"""
-
-SUCCESS_CRITERIA = [
-    "Protect Gucci Group DNA while still enabling shared leadership language.",
-    "Show how the competency framework, 360 feedback, and coaching improve talent development and mobility.",
-    "Address regional rollout friction, stakeholder buy-in, and execution overhead.",
-    "Deliver a final recommendation that clearly balances brand DNA, development goals, and rollout realism.",
-]
 
 EXPORT_ROOT = Path(__file__).resolve().parent / "exports" / "portfolio-packs"
 
@@ -48,6 +35,18 @@ def _append_message(role: str, content: str) -> None:
             "content": content,
         }
     )
+
+
+def _to_langchain_messages(chat_history: list[dict]) -> list[HumanMessage | AIMessage]:
+    messages: list[HumanMessage | AIMessage] = []
+    for message in chat_history:
+        content = str(message.get("content", ""))
+        role = message.get("role")
+        if role == "user":
+            messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            messages.append(AIMessage(content=content))
+    return messages
 
 
 def _message_id(message: dict, index: int) -> str:
@@ -234,8 +233,17 @@ def _render_portfolio_sidebar() -> None:
         st.caption(f"Workspace copy: {last_export['file_path']}")
 
 
-st.title("AI Co-worker Engine (LangGraph + Multi-Agent)")
-st.markdown(CASE_BRIEF)
+def _render_coworker_sidebar() -> None:
+    st.markdown("### AI Co-workers")
+    for persona in ACTIVE_SIMULATION.personas:
+        aliases = ", ".join(persona.aliases)
+        st.markdown(f"- **{persona.name}**")
+        st.caption(f"Tag with {aliases}")
+
+
+st.title("AI Co-worker Engine")
+st.caption(ACTIVE_SIMULATION.title)
+st.markdown(ACTIVE_SIMULATION.brief)
 
 # Chat history initialization
 if "messages" not in st.session_state:
@@ -244,8 +252,9 @@ if "thread_id" not in st.session_state:
     st.session_state.thread_id = f"streamlit-{uuid4()}"
 
 with st.sidebar:
+    _render_coworker_sidebar()
     st.markdown("### Success Criteria")
-    for item in SUCCESS_CRITERIA:
+    for item in ACTIVE_SIMULATION.success_criteria:
         st.markdown(f"- {item}")
     _render_portfolio_sidebar()
 
@@ -258,7 +267,7 @@ for index, message in enumerate(st.session_state.messages):
             _render_save_actions(message, message_id)
 
 # User input
-if prompt := st.chat_input("Ask @CEO, @CHRO, or @regional..."):
+if prompt := st.chat_input(f"Ask {ACTIVE_SIMULATION.tag_hints}..."):
     # Append user message
     _append_message("user", prompt)
     with st.chat_message("user"):
@@ -267,7 +276,7 @@ if prompt := st.chat_input("Ask @CEO, @CHRO, or @regional..."):
     # Invoke the LangGraph Engine
     with st.chat_message("assistant"):
         input_state = {
-            "messages": [HumanMessage(content=prompt)]
+            "messages": _to_langchain_messages(st.session_state.messages)
         }
         
         # Configure thread for LangGraph memory

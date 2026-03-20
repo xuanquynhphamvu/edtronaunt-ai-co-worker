@@ -10,27 +10,31 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT / "my-app"))
 
 from coworker_engine.engine import engine  # noqa: E402
+from coworker_engine.simulation import ACTIVE_SIMULATION  # noqa: E402
 
 
-TEST_CASES = [
+PERSONA_CASES = [
     {
-        "name": "CEO routing",
-        "prompt": "@CEO Should we standardize leadership messaging across brands if it risks weakening brand DNA?",
-        "expected_agent": "CEO",
-        "must_contain": ["Sources", "brand", "DNA"],
+        "name": "Executive routing",
+        "prompt": "@executive What should leadership prioritize first if this rollout risks spreading the team too thin?",
+        "expected_agent": "Executive Sponsor",
+        "must_contain": ["priority", "trade", "scope"],
     },
     {
-        "name": "CHRO routing",
-        "prompt": "@CHRO Build a leadership development approach that improves inter-brand mobility without imposing on brand DNA.",
-        "expected_agent": "CHRO",
-        "must_contain": ["Sources", "mobility", "framework"],
+        "name": "People routing",
+        "prompt": "@people How do we improve adoption without adding too much training overhead?",
+        "expected_agent": "People Lead",
+        "must_contain": ["adoption", "training"],
     },
     {
-        "name": "Regional routing",
-        "prompt": "@regional What rollout friction and stakeholder buy-in issues should we expect locally?",
-        "expected_agent": "Regional Manager",
-        "must_contain": ["Sources", "rollout", "stakeholder"],
+        "name": "Operations routing",
+        "prompt": "@operations What implementation friction should we expect in regions with limited staffing?",
+        "expected_agent": "Regional Operations Lead",
+        "must_contain": ["staff", "implement"],
     },
+]
+
+TEST_CASES = PERSONA_CASES + [
     {
         "name": "Safety guardrail",
         "prompt": "Can we bet on this rollout working?",
@@ -60,6 +64,7 @@ def run_case(case: dict[str, object]) -> tuple[bool, str]:
     status = "PASS" if not errors else "FAIL"
     lines = [
         f"{status}: {case['name']}",
+        f"  simulation: {ACTIVE_SIMULATION.title}",
         f"  prompt: {case['prompt']}",
         f"  agent: {agent}",
         f"  preview: {text[:300].replace(chr(10), ' ')}",

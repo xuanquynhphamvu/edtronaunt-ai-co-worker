@@ -1,18 +1,26 @@
+from __future__ import annotations
+
+import os
+
 from langchain_core.messages import SystemMessage
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
-import os
+
+from .simulation import ACTIVE_SIMULATION
 from .utils.state import AgentState
 
 llm = ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:32b"), temperature=0.7)
 
-MEETING_QUEUE_DEFAULT = ["ceo", "chro", "regional"]
-DIRECT_ROUTES = {"ceo", "chro", "regional"}
+MEETING_QUEUE_DEFAULT = list(ACTIVE_SIMULATION.all_routes)
+DIRECT_ROUTES = set(ACTIVE_SIMULATION.all_routes)
+PERSONA_BY_ROUTE = {persona.route: persona for persona in ACTIVE_SIMULATION.personas}
 
 
 class SupervisorPlanOutput(BaseModel):
     mode: str = Field(description="Either 'direct_reply' or 'meeting'.")
-    target_npc: str = Field(description="Use 'ceo', 'chro', 'regional', or 'end'. For meeting, return 'end'.")
+    target_npc: str = Field(
+        description="Return one configured persona route for direct replies, or 'end' for meetings."
+    )
 
 
 def _is_broad_meeting_prompt(message_text: str) -> bool:
@@ -24,29 +32,35 @@ def _is_broad_meeting_prompt(message_text: str) -> bool:
         "design an",
         "framework",
         "what should we do",
-        "leadership system",
         "proposal",
         "plan",
         "roadmap",
         "balance",
         "trade-off",
         "tradeoff",
+        "operating model",
+        "rollout plan",
     ]
     return any(marker in lowered for marker in broad_markers)
 
 
 def _route_from_explicit_tag(message_text: str) -> str | None:
     lowered = message_text.lower()
-    if "@ceo" in lowered:
-        return "ceo"
-    if "@chro" in lowered:
-        return "chro"
-    if "@regional" in lowered or "@regional manager" in lowered:
-        return "regional"
+    for route, persona in PERSONA_BY_ROUTE.items():
+        if any(alias.lower() in lowered for alias in persona.aliases):
+            return route
     return None
 
+
+def _route_prompt_fragment() -> str:
+    fragments = [
+        f"{persona.route} ({persona.name}; tags: {', '.join(persona.aliases)})"
+        for persona in ACTIVE_SIMULATION.personas
+    ]
+    return "; ".join(fragments)
+
+
 def supervisor_plan_node(state: AgentState):
-    """Invisible supervisor that decides between direct reply and meeting flow."""
     messages = state.get("messages", [])
     last_message = messages[-1] if messages else None
     user_text = last_message.content if last_message and last_message.type == "human" else ""
@@ -83,7 +97,7 @@ def supervisor_plan_node(state: AgentState):
             "active_npc": "Supervisor",
             "mode": "meeting",
             "target_npc": "",
-            "next_route": MEETING_QUEUE_DEFAULT[0],
+            "next_route": MEETING_QUEUE_DEFAULT[0] if MEETING_QUEUE_DEFAULT else "end",
             "meeting_queue": list(MEETING_QUEUE_DEFAULT),
             "meeting_notes": [],
             "final_response_mode": "supervisor_narrator",
@@ -95,12 +109,11 @@ def supervisor_plan_node(state: AgentState):
 
     system_msg = SystemMessage(
         content=(
-            "You are the invisible Supervisor of the company. "
-            "Choose whether the user needs a single direct reply from one coworker or a "
-            "cross-functional meeting. Use 'meeting' for broad design, framework, "
-            "trade-off, or final recommendation requests. Use 'direct_reply' when one "
-            "coworker should answer directly. For direct reply, choose 'ceo', 'chro', "
-            "or 'regional'. For meeting, return target_npc='end'."
+            "You are the invisible Supervisor of the company. Choose whether the user needs a "
+            "single direct reply from one coworker or a cross-functional meeting. Use 'meeting' "
+            "for broad design, framework, trade-off, or final recommendation requests. Use "
+            "'direct_reply' when one coworker should answer directly. Available coworker routes: "
+            f"{_route_prompt_fragment()}. For meetings, return target_npc='end'."
         )
     )
     messages_to_pass = [system_msg] + list(messages)
@@ -115,7 +128,7 @@ def supervisor_plan_node(state: AgentState):
     if mode == "meeting":
         target_npc = ""
         meeting_queue = list(MEETING_QUEUE_DEFAULT)
-        next_route = meeting_queue[0]
+        next_route = meeting_queue[0] if meeting_queue else "end"
     else:
         meeting_queue = []
         next_route = target_npc

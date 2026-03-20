@@ -16,30 +16,30 @@ def main() -> int:
     save_portfolio_artifact(
         session_state,
         artifact_type="final_plan",
-        title="Gucci Group leadership system",
+        title="Cross-functional rollout plan",
         body_markdown=(
-            "Create a group-level leadership system with a shared DNA spine, "
-            "brand-specific calibration, and a phased rollout."
+            "Create a rollout plan with a clear scope, staged launch sequence, "
+            "and room for local adaptation."
         ),
         source_notes="Scenario brief; simulation design brief",
     )
     save_portfolio_artifact(
         session_state,
         artifact_type="internal_comm",
-        title="Regional pilot email",
+        title="Pilot launch email",
         body_markdown=(
-            "Subject: Regional pilot launch\n\n"
-            "We will launch the leadership pilot with local adaptation workshops and manager coaching."
+            "Subject: Pilot launch\n\n"
+            "We will launch the pilot with role-based enablement, local readiness checks, and manager support."
         ),
-        metadata={"comm_type": "email", "audience": "Regional HR leads"},
+        metadata={"comm_type": "email", "audience": "Regional leads"},
     )
     save_portfolio_artifact(
         session_state,
         artifact_type="executive_update",
         title="Executive leadership update",
         body_markdown=(
-            "The proposal protects brand DNA, improves talent visibility, and stages rollout risk "
-            "through a pilot before global expansion."
+            "The proposal clarifies scope, improves adoption readiness, and stages execution risk "
+            "through a pilot before wider expansion."
         ),
     )
 
