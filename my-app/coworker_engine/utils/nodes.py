@@ -152,6 +152,52 @@ def _compress_chat_reply(text: str, user_text: str) -> str:
     return " ".join(sentences[:2]).strip()
 
 
+def _build_turn_focus_instruction(npc_name: str, user_text: str) -> str:
+    lowered = user_text.lower()
+    instructions: list[str] = []
+
+    asks_for_tradeoff = any(
+        term in lowered
+        for term in ["trade-off", "tradeoff", "balance", "what would you force", "final recommendation"]
+    )
+
+    if npc_name == "CHRO":
+        asks_for_roi = "roi" in lowered or "return on investment" in lowered
+        asks_for_mobility = "mobility" in lowered or "inter-brand" in lowered
+        asks_for_360 = "360" in lowered or "feedback" in lowered
+        asks_for_coaching = "coaching" in lowered or "coach" in lowered
+
+        if asks_for_roi or asks_for_mobility or asks_for_360 or asks_for_coaching:
+            instructions.append(
+                "For this turn, do not stay generic. If ROI is requested, state one concrete business benefit "
+                "or measurable outcome. If mobility is requested, state exactly how the proposal improves inter-brand mobility."
+            )
+        if asks_for_360 or asks_for_coaching:
+            instructions.append(
+                "When 360 feedback or coaching is mentioned, explain their role separately instead of collapsing them into generic training."
+            )
+        if asks_for_tradeoff:
+            instructions.append(
+                "State one explicit trade-off, such as depth of development versus rollout cost or speed."
+            )
+
+    if npc_name == "Regional Manager":
+        asks_for_rollout = any(
+            term in lowered
+            for term in ["rollout", "local", "region", "regional", "adoption", "stakeholder", "burden"]
+        )
+        if asks_for_rollout or asks_for_tradeoff:
+            instructions.append(
+                "Be concrete about local implementation burden: name at least one staffing, time, or adoption constraint."
+            )
+        if asks_for_tradeoff:
+            instructions.append(
+                "Do not end with a clarification question. State one concrete trade-off you would force HQ to accept."
+            )
+
+    return " ".join(instructions)
+
+
 def build_npc_node(prompt: str, npc_name: str, namespace: str):
     """Factory function to build node logic for a specific NPC."""
 
@@ -213,6 +259,10 @@ def build_npc_node(prompt: str, npc_name: str, namespace: str):
             f"{reputation:.2f}/1.0 — your attitude toward them is currently {warmth}. "
             f"Reflect this in how forthcoming and warm your response is."
         )
+
+        turn_focus_instruction = _build_turn_focus_instruction(npc_name, last_user_message)
+        if turn_focus_instruction:
+            system_message_content += f"\n\n[TURN-SPECIFIC REQUIREMENT]: {turn_focus_instruction}"
 
         if knowledge_chunks:
             system_message_content += (
