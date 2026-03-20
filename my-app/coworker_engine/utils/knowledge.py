@@ -119,9 +119,9 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
         namespace="executive",
         source="Reusable simulation starter brief",
         public_source="Scenario starter",
-        title="Executive sponsor context",
+        title="CEO context",
         content=(
-            "The Executive Sponsor is responsible for business direction, sequencing, and "
+            "The CEO is responsible for business direction, sequencing, and "
             "decision quality. This role pushes back on proposals that increase scope, add "
             "governance overhead, or fail to define a clear outcome and ownership model."
         ),
@@ -131,9 +131,9 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
         namespace="people",
         source="Reusable simulation starter brief",
         public_source="Scenario starter",
-        title="People lead context",
+        title="CHRO context",
         content=(
-            "The People Lead focuses on change adoption, role clarity, capability building, "
+            "The CHRO focuses on change adoption, role clarity, capability building, "
             "training burden, and sustainable behavior change. This role challenges plans that "
             "add process without a concrete adoption mechanism or measurable value."
         ),
@@ -143,11 +143,12 @@ BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
         namespace="operations",
         source="Reusable simulation starter brief",
         public_source="Scenario starter",
-        title="Regional operations context",
+        title="Regional communications context",
         content=(
-            "The Regional Operations Lead provides local delivery realism, sequencing constraints, "
-            "staffing pressure, and rollout risk. This role highlights where central plans ignore "
-            "implementation capacity, market timing, or uneven readiness across teams."
+            "The Employer Branding & Internal Communications Regional Manager provides regional "
+            "delivery realism, local communication feedback, training pressure, and rollout risk. "
+            "This role highlights where central plans ignore implementation capacity, market timing, "
+            "or uneven readiness across teams."
         ),
     ),
     KnowledgeChunk(
