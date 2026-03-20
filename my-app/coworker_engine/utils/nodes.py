@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import os
 import re
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, SystemMessage
-from langchain_ollama import ChatOllama
 
 from ..simulation import ACTIVE_SIMULATION, PersonaDefinition
 from .agent_memory import (
@@ -15,6 +13,7 @@ from .agent_memory import (
     load_persona_memory,
 )
 from .knowledge import format_knowledge_context, retrieve_knowledge
+from .llm import get_chat_llm
 from .safety import find_forbidden_language
 from .state import AgentState, VisibleResponse
 from .tools import (
@@ -29,8 +28,7 @@ from .tools import (
 
 load_dotenv()
 
-llm = ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:32b"), temperature=0.7)
-TOOL_CAPABLE_MODEL_PREFIXES = ("qwen", "mistral", "smollm", "gemma", "deepseek")
+llm = get_chat_llm(temperature=0.7)
 PERSONA_BY_ROUTE = {persona.route: persona for persona in ACTIVE_SIMULATION.personas}
 ROUTE_BY_NPC = {persona.name: persona.route for persona in ACTIVE_SIMULATION.personas}
 REPUTATION_TRIGGERS = {
@@ -270,11 +268,7 @@ def build_npc_node(persona: PersonaDefinition):
         add_jira_comment,
         update_jira_status,
     ]
-    tool_enabled_llm = (
-        llm.bind_tools(agent_tools)
-        if llm.model.lower().startswith(TOOL_CAPABLE_MODEL_PREFIXES)
-        else None
-    )
+    tool_enabled_llm = llm.bind_tools(agent_tools)
 
     def node(state: AgentState):
         full_history = list(state.get("messages", []))
@@ -369,28 +363,25 @@ def build_npc_node(persona: PersonaDefinition):
         windowed_history = full_history[-HISTORY_WINDOW:]
         messages_to_pass = [system_message] + windowed_history
 
-        if tool_enabled_llm is not None:
-            response = tool_enabled_llm.invoke(messages_to_pass)
-            if getattr(response, "tool_calls", None):
-                append_persona_tool_handoff(
-                    persona,
-                    user_message=last_user_message,
-                    tool_names=[
-                        str(tool_call.get("name", "tool"))
-                        for tool_call in getattr(response, "tool_calls", [])
-                    ],
-                    session_id=session_id,
-                )
-                tool_result = {
-                    "messages": [response],
-                    "active_npc": persona.name,
-                    "visible_responses": list(state.get("visible_responses", [])),
-                    "supervisor_hint": state.get("supervisor_hint", ""),
-                }
-                tool_result.update(reputation_state)
-                return tool_result
-        else:
-            response = llm.invoke(messages_to_pass)
+        response = tool_enabled_llm.invoke(messages_to_pass)
+        if getattr(response, "tool_calls", None):
+            append_persona_tool_handoff(
+                persona,
+                user_message=last_user_message,
+                tool_names=[
+                    str(tool_call.get("name", "tool"))
+                    for tool_call in getattr(response, "tool_calls", [])
+                ],
+                session_id=session_id,
+            )
+            tool_result = {
+                "messages": [response],
+                "active_npc": persona.name,
+                "visible_responses": list(state.get("visible_responses", [])),
+                "supervisor_hint": state.get("supervisor_hint", ""),
+            }
+            tool_result.update(reputation_state)
+            return tool_result
 
         response_text = (
             response.content if isinstance(response.content, str) else str(response.content)

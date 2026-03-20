@@ -7,6 +7,3 @@
 
 ## Current Context
 - No durable task knowledge recorded yet.
-
-## Task Journal
-_No task updates recorded yet._

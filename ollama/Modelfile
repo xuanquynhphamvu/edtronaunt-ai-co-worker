@@ -1,0 +1,11 @@
+FROM qwen2.5:32b
+
+# Set standard generation parameters
+PARAMETER temperature 0.1
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|im_start|>"
+
+# You can add custom system instructions here if needed:
+# SYSTEM """
+# You are an expert AI Co-worker...
+# """

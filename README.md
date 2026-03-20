@@ -373,6 +373,9 @@ Create a `.env` file in the repository root.
 Recommended variables:
 
 ```bash
+MODEL_PROVIDER=openai
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4o-mini
 OLLAMA_MODEL=qwen2.5:32b
 FAKE_JIRA_BASE_URL=http://127.0.0.1:5000
 FAKE_JIRA_DB_PATH=/absolute/path/optional-fake-jira.db
@@ -382,7 +385,10 @@ GOOGLE_API_KEY=optional_for_list_models_script
 
 Notes:
 
-- `OLLAMA_MODEL` defaults to `qwen2.5:32b` if omitted.
+- `MODEL_PROVIDER` supports `openai` and `ollama`, and defaults to `openai`.
+- `OPENAI_API_KEY` is required when `MODEL_PROVIDER=openai`.
+- `OPENAI_MODEL` defaults to `gpt-4o-mini` if omitted.
+- `OLLAMA_MODEL` defaults to `qwen2.5:32b` if omitted and is used when `MODEL_PROVIDER=ollama`.
 - `FAKE_JIRA_BASE_URL` defaults to `http://127.0.0.1:5000`.
 - `FAKE_JIRA_DB_PATH` defaults to `data/fake_jira/tasks.db`.
 - `AGENT_MEMORY_ROOT` is optional.
