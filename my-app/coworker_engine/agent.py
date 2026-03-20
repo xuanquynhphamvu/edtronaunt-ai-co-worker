@@ -7,6 +7,11 @@ from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 
 from .simulation import ACTIVE_SIMULATION
+from .utils.agent_memory import (
+    append_supervisor_knowledge,
+    ensure_simulation_agent_files,
+    load_supervisor_memory,
+)
 from .utils.state import AgentState
 
 llm = ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:32b"), temperature=0.7)
@@ -14,6 +19,7 @@ llm = ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:32b"), temperature=0.7
 MEETING_QUEUE_DEFAULT = list(ACTIVE_SIMULATION.all_routes)
 DIRECT_ROUTES = set(ACTIVE_SIMULATION.all_routes)
 PERSONA_BY_ROUTE = {persona.route: persona for persona in ACTIVE_SIMULATION.personas}
+ensure_simulation_agent_files(ACTIVE_SIMULATION)
 
 
 class SupervisorPlanOutput(BaseModel):
@@ -61,6 +67,7 @@ def _route_prompt_fragment() -> str:
 
 
 def supervisor_plan_node(state: AgentState):
+    supervisor_soul, supervisor_knowledge = load_supervisor_memory()
     messages = state.get("messages", [])
     last_message = messages[-1] if messages else None
     user_text = last_message.content if last_message and last_message.type == "human" else ""
@@ -78,6 +85,14 @@ def supervisor_plan_node(state: AgentState):
         )
 
     if explicit_route:
+        append_supervisor_knowledge(
+            "Routing decision",
+            [
+                f"Mode: direct_reply",
+                f"User request: {' '.join(user_text.split())[:220]}",
+                f"Target route: {explicit_route}",
+            ],
+        )
         return {
             "active_npc": "Supervisor",
             "mode": "direct_reply",
@@ -93,6 +108,14 @@ def supervisor_plan_node(state: AgentState):
         }
 
     if _is_broad_meeting_prompt(user_text):
+        append_supervisor_knowledge(
+            "Routing decision",
+            [
+                "Mode: meeting",
+                f"User request: {' '.join(user_text.split())[:220]}",
+                "Target route: end",
+            ],
+        )
         return {
             "active_npc": "Supervisor",
             "mode": "meeting",
@@ -109,6 +132,9 @@ def supervisor_plan_node(state: AgentState):
 
     system_msg = SystemMessage(
         content=(
+            "Use these markdown files as the Supervisor's durable internal memory.\n\n"
+            f"[SOUL.md]\n{supervisor_soul}\n\n"
+            f"[Knowledge.md]\n{supervisor_knowledge}\n\n"
             "You are the invisible Supervisor of the company. Choose whether the user needs a "
             "single direct reply from one coworker or a cross-functional meeting. Use 'meeting' "
             "for broad design, framework, trade-off, or final recommendation requests. Use "
@@ -132,6 +158,16 @@ def supervisor_plan_node(state: AgentState):
     else:
         meeting_queue = []
         next_route = target_npc
+
+    append_supervisor_knowledge(
+        "Routing decision",
+        [
+            f"Mode: {mode}",
+            f"User request: {' '.join(user_text.split())[:220]}",
+            f"Target route: {target_npc or next_route}",
+            f"Supervisor hint: {supervisor_hint or 'none'}",
+        ],
+    )
 
     return {
         "active_npc": "Supervisor",

@@ -11,6 +11,9 @@ try:
 except ImportError:  # pragma: no cover - exercised indirectly in tests
     faiss = None
 
+from ..simulation import ACTIVE_SIMULATION
+from .agent_memory import ensure_simulation_agent_files, read_persona_knowledge_markdown
+
 
 WORD_RE = re.compile(r"[a-z0-9']+")
 EMBED_DIM = 512
@@ -26,7 +29,7 @@ class KnowledgeChunk:
     content: str
 
 
-KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
+BASE_KNOWLEDGE_CHUNKS: list[KnowledgeChunk] = [
     KnowledgeChunk(
         chunk_id="assignment_mission",
         namespace="shared",
@@ -178,18 +181,39 @@ def _embed(text: str) -> np.ndarray:
     return vector
 
 
-_EMBEDDINGS = np.vstack([_embed(chunk.content) for chunk in KNOWLEDGE_CHUNKS])
-_INDEX = faiss.IndexFlatIP(EMBED_DIM) if faiss is not None else None
-if _INDEX is not None:
-    _INDEX.add(_EMBEDDINGS)
+def _dynamic_agent_knowledge_chunks() -> list[KnowledgeChunk]:
+    ensure_simulation_agent_files(ACTIVE_SIMULATION)
+
+    chunks: list[KnowledgeChunk] = []
+    for persona in ACTIVE_SIMULATION.personas:
+        content = read_persona_knowledge_markdown(persona).strip()
+        if not content:
+            continue
+        chunks.append(
+            KnowledgeChunk(
+                chunk_id=f"{persona.route}_knowledge_markdown",
+                namespace=persona.route,
+                source=f"agent_memory/{persona.route}/Knowledge.md",
+                public_source=f"{persona.name} Knowledge.md",
+                title=f"{persona.name} working knowledge",
+                content=content,
+            )
+        )
+    return chunks
 
 
-def _search_indices(query_vector: np.ndarray, k: int) -> np.ndarray:
-    if _INDEX is not None:
-        _, indices = _INDEX.search(query_vector.reshape(1, -1), k)
+def _all_knowledge_chunks() -> list[KnowledgeChunk]:
+    return BASE_KNOWLEDGE_CHUNKS + _dynamic_agent_knowledge_chunks()
+
+
+def _search_indices(query_vector: np.ndarray, embeddings: np.ndarray, k: int) -> np.ndarray:
+    if faiss is not None:
+        index = faiss.IndexFlatIP(EMBED_DIM)
+        index.add(embeddings)
+        _, indices = index.search(query_vector.reshape(1, -1), k)
         return indices[0]
 
-    scores = _EMBEDDINGS @ query_vector
+    scores = embeddings @ query_vector
     return np.argsort(scores)[::-1][:k]
 
 
@@ -201,16 +225,21 @@ def retrieve_knowledge(
     if not query.strip():
         return []
 
+    knowledge_chunks = _all_knowledge_chunks()
+    if not knowledge_chunks:
+        return []
+
     requested = set(namespaces or [])
     query_tokens = set(_tokenize(query))
     query_vector = _embed(query)
+    embeddings = np.vstack([_embed(chunk.content) for chunk in knowledge_chunks])
 
-    k = min(len(KNOWLEDGE_CHUNKS), max(top_k * 3, top_k))
-    indices = _search_indices(query_vector, k)
+    k = min(len(knowledge_chunks), max(top_k * 3, top_k))
+    indices = _search_indices(query_vector, embeddings, k)
 
     scored: list[tuple[float, KnowledgeChunk]] = []
     for idx in indices:
-        chunk = KNOWLEDGE_CHUNKS[int(idx)]
+        chunk = knowledge_chunks[int(idx)]
         if requested and chunk.namespace not in requested and chunk.namespace != "shared":
             continue
 
