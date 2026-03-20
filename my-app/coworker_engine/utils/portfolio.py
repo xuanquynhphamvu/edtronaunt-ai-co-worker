@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from typing import Any, MutableMapping
 
+from ..simulation import ACTIVE_SIMULATION
 from .knowledge import format_public_sources, retrieve_knowledge
 from .safety import find_forbidden_language
 
@@ -23,10 +24,11 @@ ARTIFACT_DISPLAY_NAMES = {
     "executive_update": "Executive update",
 }
 
+DEFAULT_SOURCE_NAMESPACES = list(ACTIVE_SIMULATION.all_routes)
 ARTIFACT_NAMESPACE_MAP = {
-    "final_plan": ["ceo", "chro", "regional"],
-    "internal_comm": ["regional", "chro"],
-    "executive_update": ["ceo", "chro", "regional"],
+    "final_plan": DEFAULT_SOURCE_NAMESPACES,
+    "internal_comm": DEFAULT_SOURCE_NAMESPACES,
+    "executive_update": DEFAULT_SOURCE_NAMESPACES,
 }
 
 SECTION_TITLES = {
@@ -152,7 +154,7 @@ def _normalize_notes(artifact_type: str, body_markdown: str, source_notes: str |
     notes: list[str] = []
     chunks = retrieve_knowledge(
         body_markdown,
-        namespaces=ARTIFACT_NAMESPACE_MAP.get(artifact_type, ["ceo", "chro", "regional"]),
+        namespaces=ARTIFACT_NAMESPACE_MAP.get(artifact_type, DEFAULT_SOURCE_NAMESPACES),
         top_k=3,
     )
     public_sources = format_public_sources(chunks)

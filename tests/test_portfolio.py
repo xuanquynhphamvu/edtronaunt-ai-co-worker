@@ -38,7 +38,7 @@ class PortfolioRegistryTests(unittest.TestCase):
             self.session_state,
             artifact_type="internal_comm",
             title="Regional launch note",
-            body_markdown="Email draft announcing the regional pilot.",
+            body_markdown="Email draft announcing the pilot launch.",
             metadata={"comm_type": "email", "audience": "Regional leaders"},
         )
         save_portfolio_artifact(
