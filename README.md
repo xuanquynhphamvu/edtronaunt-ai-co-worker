@@ -190,7 +190,7 @@ The personas can call tools for live operational context. The current tool set i
 - Jira comment creation
 - Jira status updates
 
-The Jira integration expects an external HTTP service and is not implemented inside this repository. By default it points to:
+The Jira integration now ships with a bundled Flask + SQLite fake Jira service under [my-app/fake_jira](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/my-app/fake_jira). By default the chat tools point to:
 
 ```text
 http://127.0.0.1:5000
@@ -202,7 +202,7 @@ Override it with:
 FAKE_JIRA_BASE_URL=http://your-host:5000
 ```
 
-If the service is unavailable, the tool layer returns a graceful fallback string instead of crashing the chat flow.
+For the local demo path, use [scripts/run_demo.py](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/scripts/run_demo.py), which starts the bundled fake Jira service and the Streamlit app together. If the service is unavailable, the tool layer returns a graceful fallback string instead of crashing the chat flow.
 
 ## Portfolio Pack Export
 
@@ -280,6 +280,7 @@ These checks are applied:
 │   │       ├── safety.py
 │   │       ├── state.py
 │   │       └── tools.py
+│   ├── fake_jira/
 │   └── requirements.txt
 ├── ollama/
 │   └── Modelfile
@@ -287,9 +288,12 @@ These checks are applied:
 ├── scripts/
 │   ├── evaluate_engine.py
 │   ├── portfolio_smoke.py
+│   ├── run_demo.py
+│   ├── run_fake_jira.py
 │   └── setup_ollama_model.sh
 └── tests/
     ├── test_agent_memory.py
+    ├── test_fake_jira.py
     └── test_portfolio.py
 ```
 
@@ -300,7 +304,7 @@ These checks are applied:
 - Python 3.9+
 - Ollama installed and running locally
 - one supported local model pulled into Ollama
-- optional fake Jira backend if you want task tools to return live data
+- bundled fake Jira backend dependencies if you want task tools to return live data
 
 ### Python Dependencies
 
@@ -313,8 +317,10 @@ The project declares these dependencies in [pyproject.toml](/Users/dinhtran/Proj
 - `faiss-cpu`
 - `python-dotenv`
 - `reportlab`
+- `requests`
 - `streamlit`
 - `langchain-google-genai`
+- `flask`
 
 ## Installation
 
@@ -345,7 +351,6 @@ Or, if you prefer the lightweight requirements file under `my-app/`:
 
 ```bash
 python -m pip install -r my-app/requirements.txt
-python -m pip install streamlit langchain-google-genai
 ```
 
 ### 4. Configure Environment Variables
@@ -357,6 +362,7 @@ Recommended variables:
 ```bash
 OLLAMA_MODEL=qwen2.5:32b
 FAKE_JIRA_BASE_URL=http://127.0.0.1:5000
+FAKE_JIRA_DB_PATH=/absolute/path/optional-fake-jira.db
 AGENT_MEMORY_ROOT=/absolute/path/optional-agent-memory-root
 GOOGLE_API_KEY=optional_for_list_models_script
 ```
@@ -365,6 +371,7 @@ Notes:
 
 - `OLLAMA_MODEL` defaults to `qwen2.5:32b` if omitted.
 - `FAKE_JIRA_BASE_URL` defaults to `http://127.0.0.1:5000`.
+- `FAKE_JIRA_DB_PATH` defaults to `data/fake_jira/tasks.db`.
 - `AGENT_MEMORY_ROOT` is optional.
 - `GOOGLE_API_KEY` is only needed for `list_models.py`.
 
@@ -384,6 +391,25 @@ ollama pull qwen2.5:32b
 
 ## Running the App
 
+### One-Command Demo
+
+```bash
+python scripts/run_demo.py
+```
+
+What this does:
+
+- starts the bundled fake Jira service on `127.0.0.1:5000`
+- seeds a small demo task set the first time the database is empty
+- launches Streamlit on `127.0.0.1:8501`
+
+Useful flags:
+
+```bash
+python scripts/run_demo.py --streamlit-port 8502 --jira-port 5001
+python scripts/run_demo.py --skip-seed
+```
+
 ### Streamlit UI
 
 ```bash
@@ -396,6 +422,14 @@ What you get:
 - sidebar persona hints
 - portfolio save actions on assistant messages
 - portfolio export button once all required artifacts exist
+
+If you launch Streamlit directly and want live Jira tool responses, run the bundled fake Jira service separately or point `FAKE_JIRA_BASE_URL` at another compatible service.
+
+Bundled backend only:
+
+```bash
+python scripts/run_fake_jira.py
+```
 
 ### Command-Line Engine
 
@@ -478,12 +512,16 @@ python list_models.py
 
 This script is separate from the main app. It only lists Google Generative AI models using `GOOGLE_API_KEY`.
 
+### Bundled Fake Jira
+
+The demo runner starts fake Jira automatically. If you need the API behavior in tests or custom scripts, import [fake_jira.create_app](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/my-app/fake_jira/__init__.py) from the bundled package or run [scripts/run_fake_jira.py](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/scripts/run_fake_jira.py).
+
 ## Testing
 
 Run the focused test suite:
 
 ```bash
-python -m unittest tests.test_agent_memory tests.test_portfolio
+python -m unittest tests.test_agent_memory tests.test_portfolio tests.test_fake_jira
 ```
 
 What is covered:
@@ -517,7 +555,7 @@ This allows the graph entrypoint to be referenced as `coworker_engine.engine:eng
 This section is intentionally blunt and based on the code as it exists now.
 
 - The retrieval layer uses hashed token vectors, not production semantic embeddings.
-- The Jira backend is expected externally and is not bundled in this repository.
+- The one-command demo still depends on local Python packages plus a locally available Ollama model.
 - The default model target is large: `qwen2.5:32b`, which may be heavy for smaller machines.
 - The Streamlit app preserves chat history in `st.session_state`, but the LangGraph graph is compiled without a checkpointer, so there is no durable LangGraph thread memory across app restarts.
 - The active simulation is hardcoded to one scenario in [simulation.py](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/my-app/coworker_engine/simulation.py).
