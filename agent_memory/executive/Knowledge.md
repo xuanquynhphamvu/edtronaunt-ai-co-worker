@@ -1,7 +1,7 @@
 # Knowledge
 
 ## Working Rules
-- Store durable working knowledge for Executive Sponsor in markdown.
+- Store durable working knowledge for CEO in markdown.
 - Prefer concise notes about decisions, constraints, user needs, and recent task moves.
 - Do not copy entire transcripts unless the exact wording matters.
 

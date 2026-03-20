@@ -17,19 +17,19 @@ PERSONA_CASES = [
     {
         "name": "Executive routing",
         "prompt": "@executive What should leadership prioritize first if this rollout risks spreading the team too thin?",
-        "expected_agent": "Executive Sponsor",
+        "expected_agent": "CEO",
         "must_contain": ["priority", "trade", "scope"],
     },
     {
         "name": "People routing",
         "prompt": "@people How do we improve adoption without adding too much training overhead?",
-        "expected_agent": "People Lead",
+        "expected_agent": "CHRO",
         "must_contain": ["adoption", "training"],
     },
     {
         "name": "Operations routing",
         "prompt": "@operations What implementation friction should we expect in regions with limited staffing?",
-        "expected_agent": "Regional Operations Lead",
+        "expected_agent": "Employer Branding & Internal Communications Regional Manager",
         "must_contain": ["staff", "implement"],
     },
 ]
