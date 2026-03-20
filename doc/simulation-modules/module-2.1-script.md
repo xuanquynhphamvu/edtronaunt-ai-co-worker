@@ -6,6 +6,9 @@ Duration: 35-45 minutes
 
 Objective: Align on the leadership problem Gucci Group is solving, define the first-pass "Group DNA" themes, and identify the priority use cases for the competency model.
 
+Sample result:
+- [module-2.1-sample-result.pdf](/Users/dinhtran/Projects/Qidyyy/edtronaunt-ai-co-worker/doc/simulation-modules/module-2.1-sample-result.pdf)
+
 Inputs:
 - Gucci context
 - Brand list
