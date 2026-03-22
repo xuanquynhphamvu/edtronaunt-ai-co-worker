@@ -21,6 +21,8 @@ from coworker_engine.utils.portfolio import (
 )
 
 EXPORT_ROOT = Path(__file__).resolve().parent / "exports" / "portfolio-packs"
+STATIC_EXPORT_ROOT = Path(__file__).resolve().parent / "static" / "portfolio-packs"
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
 
 
 def _flash(level: str, text: str) -> None:
@@ -299,6 +301,8 @@ def _render_portfolio_sidebar() -> None:
                 st.session_state,
                 thread_id=st.session_state.thread_id,
                 export_root=EXPORT_ROOT,
+                published_root=STATIC_EXPORT_ROOT,
+                public_base_url=PUBLIC_BASE_URL or None,
             )
         except (PortfolioError, RuntimeError) as exc:
             _flash("error", str(exc))
@@ -319,7 +323,17 @@ def _render_portfolio_sidebar() -> None:
             mime="application/pdf",
             use_container_width=True,
         )
-        st.caption(f"Workspace copy: {last_export['file_path']}")
+        public_href = last_export.get("public_url") or last_export.get("download_path")
+        if public_href:
+            st.link_button(
+                "Open Public PDF Link",
+                str(public_href),
+                use_container_width=True,
+            )
+        if last_export.get("public_url"):
+            st.caption(f"Public URL: {last_export['public_url']}")
+        elif last_export.get("download_path"):
+            st.caption(f"Public path: {last_export['download_path']}")
 
 
 def _render_coworker_sidebar() -> None:

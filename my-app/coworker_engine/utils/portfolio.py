@@ -74,6 +74,9 @@ class ExportedPortfolioPack:
     file_path: Path
     pdf_bytes: bytes
     pack: PortfolioPack
+    published_file_path: Path | None = None
+    download_path: str | None = None
+    public_url: str | None = None
 
 
 def _utc_timestamp(created_at: datetime | None = None) -> str:
@@ -499,6 +502,8 @@ def export_portfolio_pack(
     *,
     thread_id: str,
     export_root: str | Path,
+    published_root: str | Path | None = None,
+    public_base_url: str | None = None,
     created_at: datetime | None = None,
 ) -> ExportedPortfolioPack:
     pack = _build_pack(session_state, thread_id=thread_id, created_at=created_at)
@@ -510,16 +515,36 @@ def export_portfolio_pack(
     file_path = target_dir / file_name
     file_path.write_bytes(pdf_bytes)
 
+    published_file_path: Path | None = None
+    download_path: str | None = None
+    public_url: str | None = None
+    if published_root is not None:
+        published_root_path = Path(published_root)
+        published_dir = published_root_path / thread_id
+        published_dir.mkdir(parents=True, exist_ok=True)
+        published_file_path = published_dir / file_name
+        published_file_path.write_bytes(pdf_bytes)
+        static_prefix = published_root_path.name
+        download_path = f"/app/static/{static_prefix}/{thread_id}/{file_name}"
+        if public_base_url:
+            public_url = f"{public_base_url.rstrip('/')}{download_path}"
+
     exported = ExportedPortfolioPack(
         file_name=file_name,
         file_path=file_path,
         pdf_bytes=pdf_bytes,
         pack=pack,
+        published_file_path=published_file_path,
+        download_path=download_path,
+        public_url=public_url,
     )
     session_state[PORTFOLIO_EXPORT_SESSION_KEY] = {
         "file_name": file_name,
         "file_path": str(file_path),
         "pdf_bytes": pdf_bytes,
         "exported_at": pack.exported_at,
+        "published_file_path": str(published_file_path) if published_file_path else None,
+        "download_path": download_path,
+        "public_url": public_url,
     }
     return exported

@@ -127,16 +127,30 @@ class PortfolioRegistryTests(unittest.TestCase):
         created_at = datetime(2026, 3, 20, 8, 15, 30)
 
         with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
             exported = export_portfolio_pack(
                 self.session_state,
                 thread_id="thread-123",
-                export_root=Path(tmp_dir),
+                export_root=tmp_path / "exports",
+                published_root=tmp_path / "static" / "portfolio-packs",
+                public_base_url="https://demo.example.com",
                 created_at=created_at,
             )
 
             self.assertEqual(exported.file_name, "portfolio-pack-thread-123-20260320-081530.pdf")
             self.assertTrue(exported.file_path.exists())
             self.assertEqual(exported.file_path.read_bytes(), exported.pdf_bytes)
+            self.assertIsNotNone(exported.published_file_path)
+            self.assertTrue(exported.published_file_path.exists())
+            self.assertEqual(exported.published_file_path.read_bytes(), exported.pdf_bytes)
+            self.assertEqual(
+                exported.download_path,
+                "/app/static/portfolio-packs/thread-123/portfolio-pack-thread-123-20260320-081530.pdf",
+            )
+            self.assertEqual(
+                exported.public_url,
+                "https://demo.example.com/app/static/portfolio-packs/thread-123/portfolio-pack-thread-123-20260320-081530.pdf",
+            )
             self.assertTrue(exported.pdf_bytes.startswith(b"%PDF"))
             self.assertIn(b"Final Plan", exported.pdf_bytes)
             self.assertIn(b"Internal Communications", exported.pdf_bytes)
@@ -144,6 +158,10 @@ class PortfolioRegistryTests(unittest.TestCase):
             self.assertEqual(
                 self.session_state[PORTFOLIO_EXPORT_SESSION_KEY]["file_name"],
                 exported.file_name,
+            )
+            self.assertEqual(
+                self.session_state[PORTFOLIO_EXPORT_SESSION_KEY]["public_url"],
+                exported.public_url,
             )
 
 
