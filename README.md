@@ -94,7 +94,9 @@ When readiness criteria are met, the artifacts are compiled, enriched with sourc
 
 ## Requirements
 - Python 3.9+
-- Ollama (installed and running locally)
+- One model provider:
+  - Ollama (installed and running locally), or
+  - OpenAI API access
 - Python packages specified in `pyproject.toml`
 
 ## Installation
@@ -113,7 +115,15 @@ python -m pip install -e .
 
 Create a `.env` file in the repository root:
 ```bash
+MODEL_PROVIDER=ollama
 OLLAMA_MODEL=qwen2.5:32b
+FAKE_JIRA_BASE_URL=http://127.0.0.1:5000
+```
+To use OpenAI instead of Ollama:
+```bash
+MODEL_PROVIDER=openai
+OPENAI_API_KEY=your_api_key
+OPENAI_MODEL=gpt-4o-mini
 FAKE_JIRA_BASE_URL=http://127.0.0.1:5000
 ```
 Pull the required model:

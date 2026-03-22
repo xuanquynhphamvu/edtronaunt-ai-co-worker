@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import os
-
 from langchain_core.messages import SystemMessage
-from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 
 from .simulation import ACTIVE_SIMULATION
@@ -12,9 +9,10 @@ from .utils.agent_memory import (
     ensure_simulation_agent_files,
     load_supervisor_memory,
 )
+from .utils.model_provider import create_chat_model
 from .utils.state import AgentState
 
-llm = ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:32b"), temperature=0.7)
+llm = create_chat_model(temperature=0.7)
 
 MEETING_QUEUE_DEFAULT = list(ACTIVE_SIMULATION.all_routes)
 DIRECT_ROUTES = set(ACTIVE_SIMULATION.all_routes)

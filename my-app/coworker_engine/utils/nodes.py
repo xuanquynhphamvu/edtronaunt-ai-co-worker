@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import os
 import re
 
 from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, SystemMessage
-from langchain_ollama import ChatOllama
 
 from ..simulation import ACTIVE_SIMULATION, PersonaDefinition
 from .agent_memory import (
@@ -15,6 +13,7 @@ from .agent_memory import (
     load_persona_memory,
 )
 from .knowledge import format_knowledge_context, retrieve_knowledge
+from .model_provider import create_chat_model, model_supports_tools
 from .safety import find_forbidden_language
 from .state import AgentState, VisibleResponse
 from .tools import (
@@ -29,8 +28,7 @@ from .tools import (
 
 load_dotenv()
 
-llm = ChatOllama(model=os.getenv("OLLAMA_MODEL", "qwen2.5:32b"), temperature=0.7)
-TOOL_CAPABLE_MODEL_PREFIXES = ("qwen", "mistral", "smollm", "gemma", "deepseek")
+llm = create_chat_model(temperature=0.7)
 PERSONA_BY_ROUTE = {persona.route: persona for persona in ACTIVE_SIMULATION.personas}
 ROUTE_BY_NPC = {persona.name: persona.route for persona in ACTIVE_SIMULATION.personas}
 REPUTATION_TRIGGERS = {
@@ -272,7 +270,7 @@ def build_npc_node(persona: PersonaDefinition):
     ]
     tool_enabled_llm = (
         llm.bind_tools(agent_tools)
-        if llm.model.lower().startswith(TOOL_CAPABLE_MODEL_PREFIXES)
+        if model_supports_tools(llm) and hasattr(llm, "bind_tools")
         else None
     )
 
