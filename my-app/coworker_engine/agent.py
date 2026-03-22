@@ -25,6 +25,22 @@ class SupervisorPlanOutput(BaseModel):
     target_npc: str = Field(
         description="Return one configured persona route for direct replies, or 'end' for meetings."
     )
+    executive_brief: str = Field(
+        default="",
+        description="If mode is meeting, the CEO's task brief for this meeting.",
+    )
+    people_brief: str = Field(
+        default="",
+        description="If mode is meeting, the CHRO's task brief for this meeting.",
+    )
+    operations_brief: str = Field(
+        default="",
+        description="If mode is meeting, the operations leader's task brief for this meeting.",
+    )
+    final_synthesis_goal: str = Field(
+        default="",
+        description="If mode is meeting, the final decision or synthesis question the meeting should resolve.",
+    )
 
 
 def _is_broad_meeting_prompt(message_text: str) -> bool:
@@ -64,6 +80,66 @@ def _route_prompt_fragment() -> str:
     return "; ".join(fragments)
 
 
+def _default_meeting_role_hints(user_text: str) -> dict[str, str]:
+    shared_rules = (
+        "Speak only from your role's lens. Do not restate the shared brief, problem statement, "
+        "or autonomy-versus-capability framing unless you are directly challenging it. Do not open "
+        "with agreement. Add one new concern, one challenge or caution, and one recommendation that "
+        "is specific to your function."
+    )
+    return {
+        "executive": (
+            f"{shared_rules} Focus on the business decision to make now, the boundary to set, what "
+            "should wait, and the risk of getting the sequence wrong."
+        ),
+        "people": (
+            f"{shared_rules} Focus on adoption risk, the manager behavior change required, what teams "
+            "will need to do differently, and the minimum enablement needed to make the decision stick."
+        ),
+        "operations": (
+            f"{shared_rules} Focus on rollout friction, local variation, communications burden, "
+            "timing constraints, and where execution could fail in regions or teams."
+        ),
+    }
+
+
+def _coerce_meeting_role_hints(decision: SupervisorPlanOutput, user_text: str) -> dict[str, str]:
+    fallback = _default_meeting_role_hints(user_text)
+    hints = {
+        "executive": str(decision.executive_brief or "").strip(),
+        "people": str(decision.people_brief or "").strip(),
+        "operations": str(decision.operations_brief or "").strip(),
+    }
+    final_synthesis_goal = str(decision.final_synthesis_goal or "").strip()
+    for route, fallback_hint in fallback.items():
+        hint = hints.get(route, "")
+        if not hint:
+            hints[route] = fallback_hint
+            continue
+        if final_synthesis_goal:
+            hints[route] = f"{hint} Final synthesis target: {final_synthesis_goal}"
+    return hints
+
+
+def _build_supervisor_system_message(supervisor_soul: str, supervisor_knowledge: str) -> SystemMessage:
+    return SystemMessage(
+        content=(
+            "Use these markdown files as the Supervisor's durable internal memory.\n\n"
+            f"[SOUL.md]\n{supervisor_soul}\n\n"
+            f"[Knowledge.md]\n{supervisor_knowledge}\n\n"
+            "You are the invisible Supervisor of the company. Choose whether the user needs a "
+            "single direct reply from one coworker or a cross-functional meeting. Use 'meeting' "
+            "for broad design, framework, trade-off, or final recommendation requests. Use "
+            "'direct_reply' when one coworker should answer directly. Available coworker routes: "
+            f"{_route_prompt_fragment()}.\n\n"
+            "If you choose meeting, break the task into distinct, non-overlapping role briefs. "
+            "Each brief must tell that persona what unique gap to cover, what not to repeat, and "
+            "what concrete output to provide. Avoid generic instructions like 'give your perspective'. "
+            "For meetings, return target_npc='end'."
+        )
+    )
+
+
 def supervisor_plan_node(state: AgentState):
     session_id = str(state.get("session_id", "")).strip() or None
     supervisor_soul, supervisor_knowledge = load_supervisor_memory(session_id=session_id)
@@ -99,6 +175,7 @@ def supervisor_plan_node(state: AgentState):
             "target_npc": explicit_route,
             "next_route": explicit_route,
             "meeting_queue": [],
+            "meeting_role_hints": {},
             "meeting_notes": [],
             "visible_responses": [],
             "final_response_mode": "supervisor_narrator",
@@ -109,12 +186,21 @@ def supervisor_plan_node(state: AgentState):
         }
 
     if _is_broad_meeting_prompt(user_text):
+        system_msg = _build_supervisor_system_message(supervisor_soul, supervisor_knowledge)
+        messages_to_pass = [system_msg] + list(messages)
+        planner_llm = llm.with_structured_output(SupervisorPlanOutput)
+        try:
+            decision = planner_llm.invoke(messages_to_pass)
+            meeting_role_hints = _coerce_meeting_role_hints(decision, user_text)
+        except Exception:
+            meeting_role_hints = _default_meeting_role_hints(user_text)
         append_supervisor_knowledge(
             "Routing decision",
             [
                 "Mode: meeting",
                 f"User request: {' '.join(user_text.split())[:220]}",
                 "Target route: end",
+                f"Meeting briefs: {meeting_role_hints}",
             ],
             session_id=session_id,
         )
@@ -124,6 +210,7 @@ def supervisor_plan_node(state: AgentState):
             "target_npc": "",
             "next_route": MEETING_QUEUE_DEFAULT[0] if MEETING_QUEUE_DEFAULT else "end",
             "meeting_queue": list(MEETING_QUEUE_DEFAULT),
+            "meeting_role_hints": meeting_role_hints,
             "meeting_notes": [],
             "visible_responses": [],
             "final_response_mode": "supervisor_narrator",
@@ -133,18 +220,7 @@ def supervisor_plan_node(state: AgentState):
             "supervisor_hint": supervisor_hint,
         }
 
-    system_msg = SystemMessage(
-        content=(
-            "Use these markdown files as the Supervisor's durable internal memory.\n\n"
-            f"[SOUL.md]\n{supervisor_soul}\n\n"
-            f"[Knowledge.md]\n{supervisor_knowledge}\n\n"
-            "You are the invisible Supervisor of the company. Choose whether the user needs a "
-            "single direct reply from one coworker or a cross-functional meeting. Use 'meeting' "
-            "for broad design, framework, trade-off, or final recommendation requests. Use "
-            "'direct_reply' when one coworker should answer directly. Available coworker routes: "
-            f"{_route_prompt_fragment()}. For meetings, return target_npc='end'."
-        )
-    )
+    system_msg = _build_supervisor_system_message(supervisor_soul, supervisor_knowledge)
     messages_to_pass = [system_msg] + list(messages)
     router_llm = llm.with_structured_output(SupervisorPlanOutput)
     decision = router_llm.invoke(messages_to_pass)
@@ -157,9 +233,11 @@ def supervisor_plan_node(state: AgentState):
     if mode == "meeting":
         target_npc = ""
         meeting_queue = list(MEETING_QUEUE_DEFAULT)
+        meeting_role_hints = _coerce_meeting_role_hints(decision, user_text)
         next_route = meeting_queue[0] if meeting_queue else "end"
     else:
         meeting_queue = []
+        meeting_role_hints = {}
         next_route = target_npc
 
     append_supervisor_knowledge(
@@ -168,6 +246,7 @@ def supervisor_plan_node(state: AgentState):
             f"Mode: {mode}",
             f"User request: {' '.join(user_text.split())[:220]}",
             f"Target route: {target_npc or next_route}",
+            f"Meeting briefs: {meeting_role_hints or 'none'}",
             f"Supervisor hint: {supervisor_hint or 'none'}",
         ],
         session_id=session_id,
@@ -179,6 +258,7 @@ def supervisor_plan_node(state: AgentState):
         "target_npc": target_npc,
         "next_route": next_route,
         "meeting_queue": meeting_queue,
+        "meeting_role_hints": meeting_role_hints,
         "meeting_notes": [],
         "visible_responses": [],
         "final_response_mode": "supervisor_narrator",

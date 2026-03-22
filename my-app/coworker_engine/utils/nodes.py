@@ -315,10 +315,12 @@ def build_npc_node(persona: PersonaDefinition):
             f"[SOUL.md]\n{soul_markdown}\n\n"
             f"[Knowledge.md]\n{knowledge_markdown}\n\n"
             f"Answer carefully as the selected role: {persona.name}.\n\n"
-            "Keep the answer natural and human-sized. Default to one short paragraph with 2 to 4 "
-            "sentences. Do not write a consultant-style memo. Do not give a multi-step framework "
-            "unless the user explicitly asks for one. If the user asks a broad question, give the "
-            "single most useful answer first.\n\n"
+            "Write like a thoughtful colleague speaking to the user directly. Keep the answer easy "
+            "to read, concrete, and human. Default to one or two short paragraphs, or a short list "
+            "only when it genuinely improves clarity. Do not write a consultant-style memo or pack "
+            "the answer with jargon. Do not give a multi-step framework unless the user explicitly "
+            "asks for one. If the user asks a broad question, give the single most useful answer "
+            "first.\n\n"
             f"{_simulation_context_block()}\n\n"
             "Ground your response in the role's priorities and the simulation brief. When the user "
             "asks for a recommendation, framework, or design, state a real trade-off if one matters. "
@@ -346,6 +348,12 @@ def build_npc_node(persona: PersonaDefinition):
                 last_user_message=last_user_message,
                 is_final_meeting_response=is_final_meeting_response,
             )
+            meeting_role_hints = dict(state.get("meeting_role_hints", {}))
+            role_hint = str(meeting_role_hints.get(persona.route, "")).strip()
+            if role_hint:
+                system_message_content += (
+                    f"\n\n[SUPERVISOR MEETING BRIEF]: {role_hint}"
+                )
 
         if knowledge_chunks:
             system_message_content += (
@@ -433,6 +441,7 @@ def build_npc_node(persona: PersonaDefinition):
             "messages": [response],
             "active_npc": persona.name,
             "meeting_queue": updated_meeting_queue,
+            "meeting_role_hints": dict(state.get("meeting_role_hints", {})),
             "meeting_notes": updated_meeting_notes,
             "visible_responses": updated_visible_responses,
             "supervisor_hint": (

@@ -34,6 +34,7 @@ class AgentState(TypedDict):
     mode: str                  # direct_reply | meeting
     target_npc: str            # configured persona route for direct reply
     meeting_queue: list[str]   # Remaining meeting participants in order
+    meeting_role_hints: dict[str, str]
     meeting_notes: list[MeetingNote]
     visible_responses: list[VisibleResponse]
     final_response_mode: str
