@@ -21,8 +21,8 @@ exports/
 # Runtime process files
 .run/
 
-# Agent runtime knowledge/memory
-agent_memory/
+# Agent runtime knowledge (generated at runtime, not tracked)
+agent_memory/**/Knowledge.md
 
 # Python build artifacts
 *.egg-info/
