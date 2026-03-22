@@ -17,3 +17,12 @@ venv.bak/
 *.sqlite3
 *.db
 exports/
+
+# Runtime process files
+.run/
+
+# Agent runtime knowledge/memory
+agent_memory/
+
+# Python build artifacts
+*.egg-info/
